@@ -17,6 +17,7 @@ npm run serve        # python3 -m http.server 8080, then open http://localhost:8
 ```bash
 npm test             # engine tests (node:test, no installs needed)
 npm run balance      # runs a scripted bot through a year in several genres/sizes
+npm run bump         # bump the ?v= cache-busting version after changing files (do this before every deploy)
 ```
 
 ## Architecture
@@ -55,7 +56,9 @@ The whole game state is one JSON object, including the RNG position. Saving mean
 - **Recording.** Basement demos are free and unlimited but cap production at 40. Student class projects are free but overnight and variable. Budget and pro studios cost money per session, and rushing them makes a sloppy mix. Audience reaction depends mostly on performance, so a polished mix of a weak performance reads as "lifeless".
 - **Releases.** Downloads depend on followers × engagement × hype (from teaser posts) × reaction, plus discovery. Engaged fans download it. Mostly discovery brings new followers.
 - **Social.** Engagement decays without posts. Post types behave differently: flyers need an upcoming show, practice clips depend on tightness, memes are swingy, teasers build hype. Three posts a day is spam.
-- **Money.** Gigs pay the band fund. The fund pays practice rooms, studios, PA rentals and wages. You pay yourself by splitting the fund with the unpaid members. A small part-time job keeps you afloat; it pays less the more bands you're in.
+- **Money.** Gigs pay the band fund. The fund pays practice rooms, studios, PA rentals and wages. You pay yourself by splitting the fund with the unpaid members, and you can top a fund up from your own cash anywhere it runs short. Leaders can set any member's rate or give a one-time bonus at any time (raises build loyalty; deep cuts can make people quit).
+- **Your day job.** Your profile's evenings are your work shifts: more shifts, more pay (about $25 + $22 per shift per week). Bands you've joined avoid your work nights, and playing on one costs you that shift's pay.
+- **Merch.** Order stock up front (stickers, buttons, posters, shirts, totes, hoodies). Bigger runs cost less per unit. Recordings can be released digital-only (free) or pressed as CDs (500 / 1,000 / 5,000) or vinyl (300 / 500 / 1,000). Stock sells at shows (fans buy more than strangers, great sets sell more, broke basement crowds buy cheap stuff) and trickles out online. Every show recap lists what sold, revenue, cost and margin.
 
 ## Band size and genre: hard in different ways
 

@@ -1,12 +1,12 @@
 // Calendar events, attendance, rescheduling threads, and practices.
-import { EXCUSES, DAY_NAMES_LONG, GENRES } from './data.js';
+import { EXCUSES, DAY_NAMES_LONG, GENRES } from './data.js?v=3';
 import {
   availabilityChance, adjustReliability, grantXp, shortName, displayName, extraEffect,
-} from './people.js';
-import { membersOf, coordinationDrag, bandEffect, practiceRoomCost, payroll } from './band.js';
-import { uid, weekday, dayLabel, createThread, addMessage, resolveThread, news, player } from './state.js';
-import { clamp } from './rng.js';
-import { removeMember } from './recruiting.js';
+} from './people.js?v=3';
+import { membersOf, coordinationDrag, bandEffect, practiceRoomCost, payroll } from './band.js?v=3';
+import { uid, weekday, dayLabel, createThread, addMessage, resolveThread, news, player } from './state.js?v=3';
+import { clamp } from './rng.js?v=3';
+import { removeMember } from './recruiting.js?v=3';
 
 export const EVENT_PRIORITY = { gig: 3, recording: 2, practice: 1 };
 

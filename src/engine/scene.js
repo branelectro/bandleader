@@ -1,9 +1,9 @@
 // The local scene: other bands that share bills with you, and bands that are
 // looking for members (which is how the player joins someone else's band).
-import { GENRE_IDS, GENRES, INSTRUMENTS } from './data.js';
-import { generateBandName, createBand, lineupCheck } from './band.js';
-import { generatePerson, cred, tierFor, displayName, roleLabel } from './people.js';
-import { uid, player, news, createThread } from './state.js';
+import { GENRE_IDS, GENRES, INSTRUMENTS } from './data.js?v=3';
+import { generateBandName, createBand, lineupCheck } from './band.js?v=3';
+import { generatePerson, cred, tierFor, displayName, roleLabel } from './people.js?v=3';
+import { uid, player, news, createThread } from './state.js?v=3';
 
 export function seedScene(ctx, count = 46) {
   const { state, rng } = ctx;

@@ -1,9 +1,9 @@
 // Money, gear, pay requests and personal actions.
-import { GEAR_BY_ID } from './data.js';
-import { tierFor, marketRate, shortName, displayName, TIER_LABELS, grantXp, cred } from './people.js';
-import { membersOf } from './band.js';
-import { player, createThread, resolveThread, news, addMessage, playerBands } from './state.js';
-import { removeMember } from './recruiting.js';
+import { GEAR_BY_ID } from './data.js?v=3';
+import { tierFor, marketRate, shortName, displayName, TIER_LABELS, grantXp, cred } from './people.js?v=3';
+import { membersOf } from './band.js?v=3';
+import { player, createThread, resolveThread, news, addMessage, playerBands } from './state.js?v=3';
+import { removeMember } from './recruiting.js?v=3';
 
 export const WEEKLY_JOB_PAY = 70;
 export const SELL_BACK = 0.5;
@@ -203,13 +203,92 @@ export function leaveBand(ctx, bandId) {
   return { ok: true, msg: `You left ${band.name}.` };
 }
 
+// Your day job pays per evening shift. Evenings you mark as unavailable on
+// your profile are your work shifts; skipping one for band stuff costs you it.
+export const SHIFT_PAY = 22;
+export const JOB_BASE = 25;
+export function expectedJobPay(p) {
+  return JOB_BASE + SHIFT_PAY * (p.busy || []).length;
+}
+
 export function weeklyIncome(ctx) {
   const { state } = ctx;
-  // Fewer shifts the more bands you're in.
-  const bands = playerBands(state).length;
-  const pay = Math.round(WEEKLY_JOB_PAY * Math.max(0.5, 1 - 0.15 * Math.max(0, bands - 1)));
+  const p = player(state);
+  const missed = state.missedShifts || 0;
+  const pay = Math.max(0, expectedJobPay(p) - missed * SHIFT_PAY);
+  state.missedShifts = 0;
   state.cash += pay;
+  if (missed) news(state, `Payday: $${pay} from your day job (you skipped ${missed} shift${missed > 1 ? 's' : ''} for band stuff).`);
   return pay;
+}
+
+export function updateProfile(ctx, { first, last, nickname, bio, busy }) {
+  const p = player(ctx.state);
+  if (first !== undefined) {
+    if (!String(first).trim()) return { ok: false, msg: 'You need a first name.' };
+    p.first = String(first).trim().slice(0, 20);
+  }
+  if (last !== undefined) p.last = String(last).trim().slice(0, 20);
+  if (nickname !== undefined) p.nickname = String(nickname).trim().slice(0, 16) || null;
+  if (bio !== undefined) p.bio = String(bio).slice(0, 400);
+  if (busy !== undefined) p.busy = [...new Set(busy.map(Number))].filter((d) => d >= 0 && d <= 6).sort();
+  return { ok: true, msg: `✓ Profile saved. Your day job pays about $${expectedJobPay(p)}/week.` };
+}
+
+// ---------------------------------------------------------------------------
+// Paying members on your own initiative
+// ---------------------------------------------------------------------------
+const THANKS = ['Whoa, seriously? Thank you!', 'Oh nice, that means a lot.', 'You didn\'t have to do that. Thanks!', 'Okay, I\'m officially never quitting this band.'];
+
+export function setMemberPay(ctx, bandId, personId, rate) {
+  const { state, rng } = ctx;
+  const band = state.bands[bandId];
+  const m = state.people[personId];
+  if (!band || band.leaderId !== state.playerId || !m || m.isPlayer || !band.memberIds.includes(personId)) return { ok: false, msg: 'Can\'t do that.' };
+  rate = Math.max(0, Math.round(Number(rate) || 0));
+  const old = band.pay[personId] || 0;
+  if (rate === old) return { ok: false, msg: `${shortName(m)} already gets $${old}/event.` };
+  const market = marketRate(m);
+  if (rate > 0) band.pay[personId] = rate; else delete band.pay[personId];
+
+  // Any open pay request this covers is settled.
+  for (const t of state.threads) {
+    if (!t.resolved && t.kind === 'payRequest' && t.data.personId === personId && rate >= t.data.rate) resolveThread(t, `You set their pay to $${rate}/event.`);
+  }
+
+  if (rate > old) {
+    const bump = (rate - old) / Math.max(10, market || 20);
+    m.loyalty = Math.min(100, m.loyalty + Math.min(25, 6 + bump * 12));
+    band.morale = Math.min(100, band.morale + 2);
+    createThread(state, { kind: 'dm', bandId, title: `${shortName(m)}: thanks for the raise`, from: m.id, text: `${rng.pick(THANKS)} $${rate} per practice/gig works great.` });
+    return { ok: true, msg: `✓ ${shortName(m)} now gets $${rate}/event (was $${old}). They're thrilled.` };
+  }
+  // A pay cut.
+  m.loyalty = Math.max(0, m.loyalty - Math.min(35, 8 + ((old - rate) / Math.max(10, old)) * 25));
+  if (market > 0 && rate < market * 0.5 && rng.chance(0.4 + (50 - m.loyalty) / 100)) {
+    createThread(state, { kind: 'dm', bandId, title: `${shortName(m)} quit over pay`, from: m.id, text: `I can get $${market} anywhere else. I'm not doing it for $${rate}. Good luck.` });
+    removeMember(ctx, band, personId, 'quit over a pay cut');
+    return { ok: true, msg: `${shortName(m)} quit instead of taking the cut.` };
+  }
+  createThread(state, { kind: 'dm', bandId, title: `${shortName(m)}: about the pay cut`, from: m.id, text: rate === 0 ? 'So I\'m playing for free now? ...Okay. I\'ll remember this.' : `$${rate}? That stings. I'll stick around for now.` });
+  return { ok: true, msg: `${shortName(m)}'s pay is now $${rate}/event. They're not happy.` };
+}
+
+export function giveBonus(ctx, bandId, personId, amount) {
+  const { state, rng } = ctx;
+  const band = state.bands[bandId];
+  const m = state.people[personId];
+  amount = Math.round(Number(amount) || 0);
+  if (!band || band.leaderId !== state.playerId || !m || m.isPlayer) return { ok: false, msg: 'Can\'t do that.' };
+  if (amount <= 0) return { ok: false, msg: 'Pick an amount.' };
+  if (band.cash < amount) return { ok: false, needCash: amount, msg: `The band fund only has $${Math.round(band.cash)}.` };
+  band.cash -= amount;
+  m.loyalty = Math.min(100, m.loyalty + Math.min(25, 3 + amount / 6));
+  m.missedPay = 0;
+  band.missedPay[personId] = 0;
+  band.morale = Math.min(100, band.morale + 1);
+  createThread(state, { kind: 'dm', bandId, title: `${shortName(m)}: thanks for the bonus`, from: m.id, text: `${rng.pick(THANKS)} The $${amount} really helps.` });
+  return { ok: true, msg: `✓ Gave ${shortName(m)} a $${amount} bonus from the band fund.` };
 }
 
 export { cred };

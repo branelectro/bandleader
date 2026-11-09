@@ -1,13 +1,13 @@
 import {
   ATTRS, ATTR_LABELS, INSTRUMENTS, INSTRUMENT_IDS, VOCAL_LABELS, GENRES, GENRE_IDS, GEAR_CATALOG, GEAR_SLOTS, GEAR_TIERS,
   GEAR_BY_ID, DAY_NAMES, AMATEUR_POINT_CAP, VENUE_TIERS,
-} from '../engine/data.js';
-import { cred, credBreakdown, displayName, roleLabel, TIER_LABELS, requiredSlots, shortName, SEMIPRO_AT, PRO_AT, attrTotal, availabilityChance } from '../engine/people.js';
-import { player, playerBands, dayLabel, weekday } from '../engine/state.js';
-import { membersOf, lineupCheck, payroll } from '../engine/band.js';
-import { standingLabel } from '../engine/gigs.js';
-import { SELL_BACK } from '../engine/economy.js';
-import { esc, money, bar, stat, credBadge, attrRows, gearList, extrasList, daysStrip, memberCard, gearSlotSummary, bandColor, bandDot, EVENT_ICONS, EVENT_NAMES, fundBox } from './util.js';
+} from '../engine/data.js?v=3';
+import { cred, credBreakdown, displayName, roleLabel, TIER_LABELS, requiredSlots, shortName, SEMIPRO_AT, PRO_AT, attrTotal, availabilityChance } from '../engine/people.js?v=3';
+import { player, playerBands, dayLabel, weekday } from '../engine/state.js?v=3';
+import { membersOf, lineupCheck, payroll } from '../engine/band.js?v=3';
+import { standingLabel } from '../engine/gigs.js?v=3';
+import { SELL_BACK, expectedJobPay, SHIFT_PAY } from '../engine/economy.js?v=3';
+import { esc, money, bar, stat, credBadge, attrRows, gearList, extrasList, daysStrip, memberCard, gearSlotSummary, bandColor, bandDot, EVENT_ICONS, EVENT_NAMES, fundBox, dayToggles } from './util.js?v=3';
 
 // ---------------------------------------------------------------------------
 // Character creation
@@ -47,6 +47,12 @@ export function createView(ui) {
           <span class="small muted" style="flex:1;min-width:10rem">${{ skill: 'How well you play.', experience: 'Stage time. Helps you keep it together live.', charisma: 'Stage presence and style. Sells the show.', reliability: 'Do you show up? Bands notice.' }[a]}</span>
         </div>`).join('')}
       </div>
+      <label class="field">Bio (optional)<textarea id="c-bio" rows="3" maxlength="400" placeholder="Influences, how you got into music, what you want from a band...">${esc(c.bio || '')}</textarea></label>
+      <div>
+        <h3>Your evenings</h3>
+        ${dayToggles(c.busy || [], 'create-day')}
+        <p class="small muted">Red = day-job shifts (about ${money(expectedJobPay({ busy: c.busy || [] }))}/week, ${money(SHIFT_PAY)} each). Green = free for the band. Click to switch. You can change this later.</p>
+      </div>
       <label class="field">World seed (same seed = same scene)<input type="text" id="c-seed" value="${esc(c.seed)}"></label>
       <button class="btn primary" data-action="create-go">Start playing</button>
     </div>
@@ -81,6 +87,8 @@ export function dashboardView(state, ui) {
         <div><h2>${esc(displayName(p))}</h2><div class="muted">${esc(roleLabel(p))} · ${TIER_LABELS[p.tier]}</div></div>
         ${credBadge(p)}
       </div>
+      ${p.bio ? `<div class="bio">${esc(p.bio)}</div>` : '<p class="small muted">No bio yet.</p>'}
+      <div class="row small"><span class="muted">Your evenings:</span>${daysStrip(p)}<span class="muted">Day job ≈ ${money(expectedJobPay(p))}/week</span><span class="spacer"></span><button class="btn small" data-action="profile-open">Edit profile</button></div>
       <div class="stats">
         ${stat('Cash', money(state.cash), 'personal')}
         ${stat('Bands', bands.length)}

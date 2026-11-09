@@ -126,6 +126,14 @@ hr { border: none; border-top: 1px solid var(--line); margin: .8rem 0; }
 .item.unread { border-left-color: var(--accent); }
 .item.good { border-left-color: var(--good); }
 .item.bad { border-left-color: var(--bad); }
+.batches { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .45rem; }
+.batches .btn { text-align: left; line-height: 1.25; font-weight: 600; }
+.btn.short { opacity: .6; }
+.daytoggle { display: flex; gap: 4px; flex-wrap: wrap; }
+.daytoggle button { border: 1px solid var(--line); border-radius: 6px; padding: .35rem .55rem; cursor: pointer; font-weight: 700; font-size: .85rem; background: #1d3a26; color: #bfe9cc; }
+.daytoggle button.busy { background: #4a2229; color: #f3b7bf; }
+.bio { white-space: pre-wrap; font-style: italic; color: var(--text); border-left: 3px solid var(--accent); padding-left: .6rem; margin: .5rem 0; }
+textarea { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: .45rem .6rem; color: var(--text); width: 100%; resize: vertical; }
 .item.fund-box { border-left-color: var(--accent); margin-top: .6rem; }
 
 .news { font-size: .9rem; display: flex; flex-direction: column; gap: .35rem; max-height: 420px; overflow-y: auto; }

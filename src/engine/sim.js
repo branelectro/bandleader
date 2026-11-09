@@ -1,16 +1,17 @@
 // The game loop: new game, daily tick, and inbox action dispatch.
-import { emptyState, makeCtx, commit, weekday, news, resolveThread, player, playerBands, createThread } from './state.js';
-import { createPlayer } from './people.js';
-import { seedScene, weeklySceneTick, processOpeningReplies, refreshOpenings, joinSceneBand } from './scene.js';
-import { dailyRecruiting, acceptCandidate, declineCandidate } from './recruiting.js';
-import { rollAttendance, resolvePractice, answerReschedule, answerNpcReschedule, npcDecideReschedule, weeklyMemberChecks, EVENT_PRIORITY } from './schedule.js';
-import { resolveGig, weeklyOffers } from './gigs.js';
-import { resolveSession, dailyReleases, finishRecording } from './studio.js';
-import { dailySocial } from './social.js';
-import { checkTierChanges, answerPayRequest, answerFireRequest, weeklyIncome } from './economy.js';
-import { npcWeekly, npcDaily, planPractices, answerGigProposal, expireGigProposal } from './npc.js';
-import { removeMember } from './recruiting.js';
-import { shortName } from './people.js';
+import { emptyState, makeCtx, commit, weekday, news, resolveThread, player, playerBands, createThread } from './state.js?v=3';
+import { createPlayer, DEFAULT_PLAYER_BUSY } from './people.js?v=3';
+import { seedScene, weeklySceneTick, processOpeningReplies, refreshOpenings, joinSceneBand } from './scene.js?v=3';
+import { dailyRecruiting, acceptCandidate, declineCandidate } from './recruiting.js?v=3';
+import { rollAttendance, resolvePractice, answerReschedule, answerNpcReschedule, npcDecideReschedule, weeklyMemberChecks, EVENT_PRIORITY } from './schedule.js?v=3';
+import { resolveGig, weeklyOffers } from './gigs.js?v=3';
+import { resolveSession, dailyReleases, finishRecording } from './studio.js?v=3';
+import { dailySocial } from './social.js?v=3';
+import { checkTierChanges, answerPayRequest, answerFireRequest, weeklyIncome, SHIFT_PAY } from './economy.js?v=3';
+import { npcWeekly, npcDaily, planPractices, answerGigProposal, expireGigProposal } from './npc.js?v=3';
+import { removeMember } from './recruiting.js?v=3';
+import { dailyMerch, ensureMerch } from './merch.js?v=3';
+import { shortName } from './people.js?v=3';
 
 export const STARTING_CASH = 350;
 
@@ -57,19 +58,30 @@ export function advanceDay(ctx) {
   }
   today.sort((a, b) => EVENT_PRIORITY[b.e.type] - EVENT_PRIORITY[a.e.type] || (a.band.leaderId === state.playerId ? -1 : 1));
   let playerUsed = false;
+  let skippedShift = false;
   for (const { band, e } of today) {
     const busy = playerUsed;
     if (e.type === 'practice') resolvePractice(ctx, band, e, busy);
     else if (e.type === 'gig') resolveGig(ctx, band, e, busy);
     else if (e.type === 'recording') resolveSession(ctx, band, e, busy);
-    if (busy) news(state, `You were double-booked and missed ${band.name}'s ${e.title.toLowerCase()}.`, { bandId: band.id, tone: 'bad' });
-    playerUsed = true;
+    const gaveNotice = e.notice?.includes(state.playerId);
+    if (busy && !gaveNotice) news(state, `You were double-booked and missed ${band.name}'s ${e.title.toLowerCase()}.`, { bandId: band.id, tone: 'bad' });
+    if (e.result?.present?.includes(state.playerId)) {
+      playerUsed = true;
+      // Band stuff on one of your work nights means skipping that shift.
+      if ((player(state).busy || []).includes(weekday(d)) && !skippedShift) {
+        skippedShift = true;
+        state.missedShifts = (state.missedShifts || 0) + 1;
+        news(state, `You skipped a work shift for ${band.name}'s ${e.title.toLowerCase()} (-$${SHIFT_PAY} on payday).`, { bandId: band.id });
+      }
+    }
   }
 
   for (const band of playerBands(state)) {
     dailySocial(ctx, band);
     dailyReleases(ctx, band);
     repairRecordings(ctx, band);
+    dailyMerch(ctx, band);
     if (band.npc) npcDaily(ctx, band);
     // Skills fade without practice.
     if (d - band.lastPracticeDay > 7) band.tightness = Math.max(0, band.tightness - 0.8);
@@ -151,7 +163,11 @@ export function repairRecordings(ctx, band) {
 // Run on every load: fixes saves made by older versions.
 export function repairSave(ctx) {
   const out = [];
-  for (const band of Object.values(ctx.state.bands)) out.push(...repairRecordings(ctx, band));
+  for (const band of Object.values(ctx.state.bands)) { ensureMerch(band); out.push(...repairRecordings(ctx, band)); }
+  // Saves from before work nights existed: give the default schedule so the
+  // day job keeps paying what it used to.
+  const p = player(ctx.state);
+  if (p && !p.profileVersion) { p.profileVersion = 1; if (!p.busy?.length) p.busy = [...DEFAULT_PLAYER_BUSY]; p.bio = p.bio || ''; }
   commit(ctx);
   return out;
 }

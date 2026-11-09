@@ -1,11 +1,12 @@
 // Venues, show offers, booking rules and gig results.
-import { VENUE_TIERS, VENUE_NAMES, GENRES, CROWD_REACTIONS } from './data.js';
-import { membersOf, performanceScore, lineupCheck, bandHasPA, bestRecording, bestProduction, bandEffect } from './band.js';
-import { grantXp, shortName } from './people.js';
-import { createEvent, resolveAttendance, payWages, playerConflicts } from './schedule.js';
-import { uid, weekday, dayLabel, news, createThread } from './state.js';
-import { billFor } from './scene.js';
-import { clamp } from './rng.js';
+import { VENUE_TIERS, VENUE_NAMES, GENRES, CROWD_REACTIONS } from './data.js?v=3';
+import { membersOf, performanceScore, lineupCheck, bandHasPA, bestRecording, bandEffect } from './band.js?v=3';
+import { grantXp, shortName } from './people.js?v=3';
+import { createEvent, resolveAttendance, payWages, playerConflicts } from './schedule.js?v=3';
+import { uid, weekday, dayLabel, news, createThread } from './state.js?v=3';
+import { billFor } from './scene.js?v=3';
+import { clamp } from './rng.js?v=3';
+import { sellAtGig } from './merch.js?v=3';
 
 // Band size changes *why* booking is hard, not whether the band is "better".
 export function sizeModifier(n) {
@@ -25,7 +26,9 @@ export function bookingCheck(band, tier) {
 
   const rec = bestRecording(band);
   const recQ = rec ? rec.quality : 0;
-  const prod = bestProduction(band);
+  // Clubs and up won't book off a basement demo, however well it's played.
+  const studioRecs = band.recordings.filter((r) => r.done && r.type !== 'basement');
+  const studioQ = studioRecs.length ? Math.max(...studioRecs.map((r) => r.quality)) : 0;
   let needFollowers = Math.round(v.minFollowers * sizeModifier(n));
   // A strong recording substitutes for some of the following.
   if (recQ >= v.minRecording + 15) needFollowers = Math.round(needFollowers * 0.5);
@@ -35,7 +38,11 @@ export function bookingCheck(band, tier) {
     if (band.followers < needFollowers && recQ < v.minRecording) reasons.push(`needs ${needFollowers} followers or a decent demo`);
   } else {
     if (band.followers < needFollowers) reasons.push(`needs ${needFollowers} followers`);
-    if (prod < v.minRecording - 10 || recQ < v.minRecording) reasons.push(`needs a recording of quality ${v.minRecording}+ (basement demos won't cut it)`);
+    if (studioQ < v.minRecording) {
+      reasons.push(studioRecs.length || !rec
+        ? `needs a recording of quality ${v.minRecording}+ (your best studio recording is ${studioQ})`
+        : `needs a non-basement recording of quality ${v.minRecording}+ (basement demos won't cut it)`);
+    }
   }
   if (band.standing < tier - 1) reasons.push('your scene standing is too low');
   return { ok: !reasons.length, reasons, needFollowers };
@@ -190,10 +197,11 @@ export function resolveGig(ctx, band, e, playerBusy) {
     if (sb) sb.followers += Math.round(rng.int(0, 3) + (perf > 60 ? 1 : 0));
   }
 
+  const merch = sellAtGig(ctx, band, { attendance, fans: Math.min(attendance, ownDraw), grade, tier: o.tier });
   const flavor = rng.pick(CROWD_REACTIONS[grade]);
-  const summary = `${attendance} people came. ${flavor} +${newFollowers} followers, ${pay ? `$${pay} for the band` : 'no money'}. ${notes.join(' ')}${promoted ? ` ${promoted}` : ''}`;
+  const summary = `${attendance} people came. ${flavor} +${newFollowers} followers, ${pay ? `$${pay} for the band` : 'no money'}. ${merch ? `${merch.summary} ` : ''}${notes.join(' ')}${promoted ? ` ${promoted}` : ''}`;
   e.status = 'done';
-  e.result = { summary, grade, attendance, newFollowers, pay, perf: Math.round(perf), present: present.map((m) => m.id) };
+  e.result = { summary, grade, attendance, newFollowers, pay, merch, perf: Math.round(perf), present: present.map((m) => m.id) };
   createThread(state, { kind: 'result', bandId: band.id, title: `${band.name} @ ${o.venue}: ${grade.toUpperCase()}`, text: summary });
   return e.result;
 }

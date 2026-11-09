@@ -1,20 +1,21 @@
-import { GENRES, INSTRUMENTS, INSTRUMENT_IDS, VOCAL_LABELS, VENUE_TIERS, STUDIO_TYPES, POST_TYPES, DAY_NAMES } from '../engine/data.js';
-import { shortName, availabilityChance, cred } from '../engine/people.js';
-import { player, playerBands, dayLabel, weekday } from '../engine/state.js';
+import { GENRES, INSTRUMENTS, INSTRUMENT_IDS, VOCAL_LABELS, VENUE_TIERS, STUDIO_TYPES, POST_TYPES, DAY_NAMES } from '../engine/data.js?v=3';
+import { shortName, availabilityChance, cred } from '../engine/people.js?v=3';
+import { player, playerBands, dayLabel, weekday } from '../engine/state.js?v=3';
 import {
   membersOf, lineupCheck, bandCred, practiceRoomCost, payroll, bestRecording, coordinationDrag, bandHasPA,
-} from '../engine/band.js';
-import { bookingCheck, standingLabel, standingProgress } from '../engine/gigs.js';
-import { recordingCost } from '../engine/studio.js';
-import { payGate } from '../engine/recruiting.js';
-import { postsToday } from '../engine/social.js';
-import { eventsOn } from '../engine/schedule.js';
-import { esc, money, bar, stat, memberCard, bandDot, fundBox } from './util.js';
-import { eventDetail, genreRuleText, eventButtons } from './views.js';
+} from '../engine/band.js?v=3';
+import { bookingCheck, standingLabel, standingProgress } from '../engine/gigs.js?v=3';
+import { recordingCost } from '../engine/studio.js?v=3';
+import { payGate } from '../engine/recruiting.js?v=3';
+import { postsToday } from '../engine/social.js?v=3';
+import { eventsOn } from '../engine/schedule.js?v=3';
+import { MERCH_ITEMS, DISC_FORMATS, merchSpec, ensureMerch } from '../engine/merch.js?v=3';
+import { esc, money, bar, stat, memberCard, bandDot, fundBox, unitPrice } from './util.js?v=3';
+import { eventDetail, genreRuleText, eventButtons } from './views.js?v=3';
 
 const SECTIONS = [
   ['overview', 'Overview'], ['members', 'Members'], ['schedule', 'Practice'], ['shows', 'Shows'],
-  ['studio', 'Studio'], ['social', 'Socials'], ['money', 'Money'], ['recruit', 'Recruit'],
+  ['studio', 'Studio'], ['merch', 'Merch'], ['social', 'Socials'], ['money', 'Money'], ['recruit', 'Recruit'],
 ];
 
 export function bandView(state, ui) {
@@ -26,7 +27,7 @@ export function bandView(state, ui) {
   const sec = ui.bandSection || 'overview';
   const sections = lead ? SECTIONS : SECTIONS.filter(([k]) => ['overview', 'members', 'schedule', 'shows', 'studio', 'social'].includes(k));
   const content = {
-    overview, members, schedule, shows, studio, social, money: moneyView, recruit,
+    overview, members, schedule, shows, studio, merch: merchView, social, money: moneyView, recruit,
   }[sec] || overview;
   return `${bands.length > 1 ? `<div class="subnav">${bands.map((b) => `<button class="chip ${b.id === band.id ? 'active' : ''}" data-action="open-band" data-band="${b.id}">${bandDot(state, b)}${esc(b.name)}</button>`).join('')}</div>` : ''}
     <div class="row between" style="margin-bottom:.5rem">
@@ -83,7 +84,7 @@ function members(state, ui, band, lead) {
   return `<p class="small muted">Bigger bands learn songs ${Math.round((drag - 1) * 100)}% slower${drag > 1 ? '' : ' (no penalty at this size)'}. A member who doesn't know the songs drags the whole show down. ${bandHasPA(ms) ? '<span class="good">Someone owns a PA.</span>' : '<span class="warn">Nobody owns a PA: basement shows will cost you a rental.</span>'}</p>
   <div class="grid three">${ms.map((m) => memberCard(m, {
     band,
-    extra: lead && !m.isPlayer ? `<div class="row" style="margin-top:.5rem"><span class="small muted">Loyalty ${Math.round(m.loyalty)}</span><span class="spacer"></span><button class="btn small danger" data-action="fire" data-band="${band.id}" data-person="${m.id}">Fire</button></div>` : '',
+    extra: lead && !m.isPlayer ? `<div class="row" style="margin-top:.5rem"><span class="small muted">Loyalty ${Math.round(m.loyalty)}</span><span class="spacer"></span><button class="btn small" data-action="pay-open" data-band="${band.id}" data-person="${m.id}">Pay…</button><button class="btn small danger" data-action="fire" data-band="${band.id}" data-person="${m.id}">Fire</button></div>` : '',
   })).join('')}</div>
   <div class="row" style="margin-top:1rem"><button class="btn small danger" data-action="leave-band" data-band="${band.id}">${lead ? 'Break up the band' : 'Leave the band'}</button></div>`;
 }
@@ -223,6 +224,50 @@ function social(state, ui, band, lead) {
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Merch: order stock up front, sell it at shows (and a little online).
+function batchButtons(state, band, key, spec) {
+  const base = spec.batches[0][1];
+  return spec.batches.map(([qty, unit], i) => {
+    const cost = Math.round(qty * unit);
+    const save = Math.round((1 - unit / base) * 100);
+    return `<button class="btn small ${band.cash >= cost ? '' : 'short'}" data-action="merch-order" data-band="${band.id}" data-key="${key}" data-batch="${i}" title="${qty} × ${money(unit)}">
+      <b>${qty.toLocaleString()}</b> · ${money(cost)}<br><span class="small muted">${unitPrice(unit)} each${save ? ` · save ${save}%` : ''}</span></button>`;
+  }).join('');
+}
+
+function merchView(state, ui, band) {
+  ensureMerch(band);
+  const st = band.merchStats;
+  const orders = band.merchOrders;
+  const row = (key, spec) => {
+    const inv = band.merch[key] || { qty: 0, sold: 0, revenue: 0 };
+    const incoming = orders.filter((o) => o.key === key).reduce((s, o) => s + o.qty, 0);
+    const margin = inv.unitCost ? Math.round((1 - inv.unitCost / spec.price) * 100) : null;
+    return `<div class="item merch-item">
+      <div class="row between"><div><b>${spec.icon} ${esc(spec.label)}</b> <span class="small muted">sells for ${money(spec.price)} · ${spec.leadDays} days to arrive</span></div>
+        <div class="small"><b>${inv.qty}</b> in stock${incoming ? ` · <span class="warn">${incoming} on the way</span>` : ''}${inv.sold ? ` · ${inv.sold} sold (${money(inv.revenue)})` : ''}${margin !== null ? ` · ${margin}% margin` : ''}</div></div>
+      <div class="batches">${batchButtons(state, band, key, spec)}</div>
+    </div>`;
+  };
+  const recs = band.recordings.filter((r) => r.done);
+  return `<div class="stats" style="margin-bottom:1rem">
+      ${stat('Band fund', money(band.cash))}
+      ${stat('Merch sold', st.sold.toLocaleString())}
+      ${stat('Merch revenue', money(st.revenue))}
+      ${stat('Spent on stock', money(st.cost))}
+    </div>
+    <p class="small muted">Order stock up front; it sells at your shows (fans buy more than strangers, and a great set sells more) and trickles out through your online store. Bigger runs cost more up front but much less per item. Basement crowds are broke: cheap stuff moves there, hoodies and vinyl sell at bigger venues.</p>
+    ${orders.length ? `<div class="item fund-box"><b>On the way:</b> ${orders.map((o) => `${o.qty} ${esc(merchSpec(band, o.key)?.label || o.key)} (${dayLabel(o.arriveDay)})`).join(' · ')}</div>` : ''}
+    <div class="grid two" style="margin-top:1rem">
+      <div class="panel stack"><h3>Merch table</h3>${Object.entries(MERCH_ITEMS).map(([k, s]) => row(k, s)).join('')}</div>
+      <div class="panel stack"><h3>Physical releases</h3>
+        <p class="small muted">Press CDs or vinyl of a finished recording. They only go on sale once it's released. Pressing plants have minimum runs, and the price per disc drops a lot at bigger runs.</p>
+        ${recs.length ? recs.map((r) => `<div><h4>${esc(r.title)} ${r.released ? '' : '<span class="tag warn">not released yet</span>'}</h4>${Object.keys(DISC_FORMATS).map((f) => row(`${f}:${r.id}`, merchSpec(band, `${f}:${r.id}`))).join('')}</div>`).join('') : '<p class="muted small">Finish a recording first.</p>'}
+      </div>
+    </div>`;
+}
+
 function moneyView(state, ui, band) {
   const unpaid = membersOf(state, band).filter((m) => !band.pay[m.id]).length;
   return `<div class="grid two">

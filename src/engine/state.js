@@ -1,7 +1,7 @@
 // Game state container + shared helpers. The engine never touches the DOM, so
 // it runs the same in the browser and under `node --test`.
-import { createRng, hashString } from './rng.js';
-import { DAY_NAMES, DAY_NAMES_LONG } from './data.js';
+import { createRng, hashString } from './rng.js?v=3';
+import { DAY_NAMES, DAY_NAMES_LONG } from './data.js?v=3';
 
 export const SAVE_VERSION = 1;
 

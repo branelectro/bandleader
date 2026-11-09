@@ -6,6 +6,7 @@ import { schedulePractice } from '../src/engine/schedule.js';
 import { bookGig, bookingCheck } from '../src/engine/gigs.js';
 import { bookRecording, releaseRecording } from '../src/engine/studio.js';
 import { socialPost } from '../src/engine/social.js';
+import { orderMerch } from '../src/engine/merch.js';
 import { lineupCheck, membersOf } from '../src/engine/band.js';
 import { GEAR_CATALOG, GENRES } from '../src/engine/data.js';
 import { cred } from '../src/engine/people.js';
@@ -16,7 +17,7 @@ const ROLE_PLAN = {
   prog: [{ instrument: 'drums', vocals: 'none' }, { instrument: 'bass', vocals: 'none' }, { instrument: 'keys', vocals: 'none' }, { instrument: 'vocals', vocals: 'lead' }],
 };
 
-export function playBot({ seed, genre = 'punk', days = 365, extraMembers = 0 }) {
+export function playBot({ seed, genre = 'punk', days = 365, extraMembers = 0, merch = false }) {
   const state = newGame(seed, { first: 'Bot', last: 'McBot', instrument: 'guitar', vocals: 'lead', attrs: { skill: 3, experience: 2, charisma: 3, reliability: 2 } });
   const ctx = makeCtx(state);
   for (const slot of ['guitar', 'guitarAmp', 'mic']) buyGear(ctx, GEAR_CATALOG.find((g) => g.slot === slot && g.tier === 1).id);
@@ -66,6 +67,13 @@ export function playBot({ seed, genre = 'punk', days = 365, extraMembers = 0 }) 
       const unrel = b.recordings.find((r) => r.done && !r.released);
       if (unrel) { if (b.hype > 0.5) releaseRecording(ctx, b.id, unrel.id); else socialPost(ctx, b.id, 'teaser'); }
       else if (state.day % 2 === 0) socialPost(ctx, b.id, b.events.some((e) => e.type === 'gig' && e.status === 'scheduled') ? 'flyer' : 'bts');
+      if (merch) {
+        const stock = (k) => (b.merch?.[k]?.qty || 0) + (b.merchOrders || []).filter((o) => o.key === k).reduce((s, o) => s + o.qty, 0);
+        if (stock('stickers') < 30 && b.cash > 150) orderMerch(ctx, b.id, 'stickers', 1);
+        if (stock('tshirts') < 8 && b.cash > 450) orderMerch(ctx, b.id, 'tshirts', 1);
+        const rel = b.recordings.filter((r) => r.released).at(-1);
+        if (rel && stock('cd:' + rel.id) === 0 && !rel.pressed && b.cash > 1400) { orderMerch(ctx, b.id, 'cd:' + rel.id, 0); rel.pressed = true; }
+      }
       if (b.cash > 1500 && state.day % 28 === 0) payout(ctx, b.id, 300);
     }
     advanceDay(ctx);

@@ -1,10 +1,10 @@
 // Recording: basement demos, student class projects, paid studios. And releases.
-import { STUDIO_TYPES, SONG_WORDS } from './data.js';
-import { membersOf, performanceScore, lineupCheck, bandEffect } from './band.js';
-import { grantXp, shortName } from './people.js';
-import { createEvent, resolveAttendance, payWages } from './schedule.js';
-import { uid, weekday, dayLabel, news, createThread } from './state.js';
-import { clamp } from './rng.js';
+import { STUDIO_TYPES, SONG_WORDS } from './data.js?v=3';
+import { membersOf, performanceScore, lineupCheck, bandEffect } from './band.js?v=3';
+import { grantXp, shortName } from './people.js?v=3';
+import { createEvent, resolveAttendance, payWages } from './schedule.js?v=3';
+import { uid, weekday, dayLabel, news, createThread } from './state.js?v=3';
+import { clamp } from './rng.js?v=3';
 
 // How many sessions per song a studio needs before takes are "done right".
 const SESSIONS_PER_SONG = { basement: 1.5, student: 1.0, cheap: 1.0, pro: 0.7 };

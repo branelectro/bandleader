@@ -1,10 +1,12 @@
-import { ATTRS, ATTR_LABELS, GEAR_BY_ID, GEAR_TIERS, GEAR_SLOTS, EXTRAS_BY_ID, DAY_NAMES } from '../engine/data.js';
-import { cred, displayName, roleLabel, TIER_LABELS, xpToNext, missingGear, requiredSlots, bestInSlot } from '../engine/people.js';
-import { fmtMoney } from '../engine/state.js';
+import { ATTRS, ATTR_LABELS, GEAR_BY_ID, GEAR_TIERS, GEAR_SLOTS, EXTRAS_BY_ID, DAY_NAMES } from '../engine/data.js?v=3';
+import { cred, displayName, roleLabel, TIER_LABELS, xpToNext, missingGear, requiredSlots, bestInSlot } from '../engine/people.js?v=3';
+import { fmtMoney } from '../engine/state.js?v=3';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const money = fmtMoney;
 export const pct = (v) => `${Math.round(v)}%`;
+// Per-unit prices keep their cents: 60¢, $2.40, $1.05.
+export const unitPrice = (u) => (u < 1 ? `${Math.round(u * 100)}¢` : `$${u.toFixed(2)}`);
 
 // Each band keeps one color for its whole life (stored on the band so it
 // survives saves and never shifts when you join or leave other bands).
@@ -32,6 +34,11 @@ export function fundBox(state, band, need, why) {
       <span class="small muted">You have ${money(state.cash)}.</span>
     </div>
   </div>`;
+}
+
+// Seven clickable evenings: red = work night, green = free.
+export function dayToggles(busy, action) {
+  return `<div class="daytoggle">${DAY_NAMES.map((n, i) => `<button class="${busy.includes(i) ? 'busy' : ''}" data-action="${action}" data-day="${i}" title="${busy.includes(i) ? 'Work night (click to free it up)' : 'Free (click to make it a work night)'}">${n} · ${busy.includes(i) ? 'work' : 'free'}</button>`).join('')}</div>`;
 }
 
 export const EVENT_ICONS = { practice: '🥁', gig: '🎤', recording: '🎙️' };

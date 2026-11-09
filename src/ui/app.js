@@ -1,21 +1,22 @@
-import { newGame, advanceDay, threadAction, repairSave } from '../engine/sim.js';
-import { makeCtx, commit, player, playerBands, dayLabel, weekday, SAVE_VERSION } from '../engine/state.js';
-import { createRng } from '../engine/rng.js';
-import { cred, TIER_LABELS } from '../engine/people.js';
-import { generateBandName, membersOf } from '../engine/band.js';
-import { startBand, postRecruitment, removeMember } from '../engine/recruiting.js';
-import { buyGear, sellGear, fundBand, payout, woodshed, fireMember, leaveBand } from '../engine/economy.js';
-import { schedulePractice, cancelEvent, requestReschedule, eventsOn, giveNotice, withdrawNotice } from '../engine/schedule.js';
-import { bookGig } from '../engine/gigs.js';
-import { bookRecording, releaseRecording } from '../engine/studio.js';
-import { socialPost } from '../engine/social.js';
-import { applyToOpening } from '../engine/scene.js';
-import { STUDIO_TYPES, GEAR_BY_ID, GEAR_SLOTS } from '../engine/data.js';
-import { requiredSlots, availabilityChance, shortName } from '../engine/people.js';
-import { SELL_BACK } from '../engine/economy.js';
-import { createView, dashboardView, inboxView, calendarView, shopView, sceneView } from './views.js';
-import { bandView } from './bandview.js';
-import { esc, money } from './util.js';
+import { newGame, advanceDay, threadAction, repairSave } from '../engine/sim.js?v=3';
+import { makeCtx, commit, player, playerBands, dayLabel, weekday, SAVE_VERSION } from '../engine/state.js?v=3';
+import { createRng } from '../engine/rng.js?v=3';
+import { cred, TIER_LABELS } from '../engine/people.js?v=3';
+import { generateBandName, membersOf } from '../engine/band.js?v=3';
+import { startBand, postRecruitment, removeMember } from '../engine/recruiting.js?v=3';
+import { buyGear, sellGear, fundBand, payout, woodshed, fireMember, leaveBand, setMemberPay, giveBonus, updateProfile, expectedJobPay, SHIFT_PAY } from '../engine/economy.js?v=3';
+import { schedulePractice, cancelEvent, requestReschedule, eventsOn, giveNotice, withdrawNotice } from '../engine/schedule.js?v=3';
+import { bookGig } from '../engine/gigs.js?v=3';
+import { bookRecording, releaseRecording } from '../engine/studio.js?v=3';
+import { socialPost } from '../engine/social.js?v=3';
+import { applyToOpening } from '../engine/scene.js?v=3';
+import { STUDIO_TYPES, GEAR_BY_ID, GEAR_SLOTS } from '../engine/data.js?v=3';
+import { requiredSlots, availabilityChance, shortName, marketRate, TIER_LABELS as TIERS, DEFAULT_PLAYER_BUSY } from '../engine/people.js?v=3';
+import { SELL_BACK } from '../engine/economy.js?v=3';
+import { createView, dashboardView, inboxView, calendarView, shopView, sceneView } from './views.js?v=3';
+import { bandView } from './bandview.js?v=3';
+import { esc, money, fundBox, dayToggles, unitPrice } from './util.js?v=3';
+import { orderMerch, merchSpec, DISC_FORMATS, ensureMerch } from '../engine/merch.js?v=3';
 
 const SAVE_KEY = 'bandleader-save-v1';
 const UI_KEY = 'bandleader-ui-v1';
@@ -30,7 +31,7 @@ const ui = {
   calOffset: 0,
   inboxFilter: 'all',
   shopAll: false,
-  create: { first: '', last: '', instrument: 'guitar', vocals: 'none', attrs: { skill: 3, experience: 2, charisma: 3, reliability: 2 }, seed: randomSeed() },
+  create: { first: '', last: '', instrument: 'guitar', vocals: 'none', attrs: { skill: 3, experience: 2, charisma: 3, reliability: 2 }, seed: randomSeed(), busy: [0, 2], bio: '' },
   newBand: { name: '', genre: 'punk' },
   recruit: { roles: [{ instrument: 'drums', vocals: 'none' }], payLevel: 'none' },
   studio: { type: 'basement', sessions: 4, songs: 3 },
@@ -122,7 +123,9 @@ function modal(html) {
   m.innerHTML = `<div class="panel">${html}</div>`;
   m.classList.remove('hidden');
 }
-function closeModal() { document.getElementById('modal').classList.add('hidden'); pendingConfirm = null; }
+function closeModal() { document.getElementById('modal').classList.add('hidden'); pendingConfirm = null; reopenModal = null; }
+// Pop-ups that can show a fund top-up remember how to redraw themselves.
+let reopenModal = null;
 
 // In-game "are you sure?" box. Native confirm() can be silently blocked by
 // the browser, which made buttons look broken.
@@ -176,7 +179,7 @@ const handlers = {
     readCreate();
     const c = ui.create;
     if (!c.first.trim()) return toast('Give yourself a name first.', true);
-    const state = newGame(c.seed || randomSeed(), { first: c.first.trim(), last: c.last.trim(), instrument: c.instrument, vocals: c.instrument === 'vocals' ? 'lead' : c.vocals, attrs: c.attrs });
+    const state = newGame(c.seed || randomSeed(), { first: c.first.trim(), last: c.last.trim(), instrument: c.instrument, vocals: c.instrument === 'vocals' ? 'lead' : c.vocals, attrs: c.attrs, busy: c.busy, bio: c.bio });
     ctx = makeCtx(state);
     ui.tab = 'shop';
     ui.recruit.roles = [{ instrument: c.instrument === 'drums' ? 'guitar' : 'drums', vocals: 'none' }];
@@ -288,10 +291,77 @@ const handlers = {
   schedule: (d) => act(() => schedulePractice(ctx, d.band, Number(d.day))),
   book: (d) => act(() => bookGig(ctx, d.band, d.offer)),
   record: (d) => act(() => bookRecording(ctx, d.band, { type: ui.studio.type, sessions: ui.studio.sessions, songs: ui.studio.songs })),
-  release: (d) => act(() => releaseRecording(ctx, d.band, d.rec)),
+  release: (d) => releaseModal(d.band, d.rec),
+  'release-go': (d) => {
+    const band = ctx.state.bands[d.band];
+    if (d.format !== 'digital') {
+      const spec = merchSpec(band, `${d.format}:${d.rec}`);
+      const [qty, unit] = spec.batches[Number(d.batch)];
+      const cost = Math.round(qty * unit);
+      if (band.cash < cost) return releaseModal(d.band, d.rec, `${fundBox(ctx.state, band, cost, `pressing ${qty} ${spec.label.split('" ').pop()}`)}`);
+    }
+    closeModal();
+    act(() => {
+      const r = releaseRecording(ctx, d.band, d.rec);
+      if (!r.ok || d.format === 'digital') return r;
+      const o = orderMerch(ctx, d.band, `${d.format}:${d.rec}`, Number(d.batch));
+      return { ok: o.ok, msg: `${r.msg} ${o.msg}` };
+    });
+  },
+  'merch-order': (d) => {
+    const band = ctx.state.bands[d.band];
+    const spec = merchSpec(band, d.key);
+    const [qty, unit] = spec.batches[Number(d.batch)];
+    const cost = Math.round(qty * unit);
+    if (band.cash < cost) {
+      modal(`<h3>Order ${qty} ${esc(spec.label)}?</h3>${fundBox(ctx.state, band, cost, 'this order')}<div class="actions"><button class="btn" data-action="close-modal">Close</button></div>`);
+      reopenModal = () => handlers['merch-order'](d);
+      return;
+    }
+    confirmBox({
+      title: `Order ${qty.toLocaleString()} ${esc(spec.label)}?`,
+      body: `<p>${money(cost)} total (${unitPrice(unit)} each). They sell for ${money(spec.price)} each, so a full sell-through brings in ${money(qty * spec.price)}.</p>
+        <p class="small muted">Arrives ${dayLabel(ctx.state.day + spec.leadDays, true)}. Band fund after: ${money(band.cash - cost)}.</p>`,
+      yes: `Order for ${money(cost)}`,
+      onYes: () => act(() => orderMerch(ctx, d.band, d.key, Number(d.batch))),
+    });
+  },
+  'pay-open': (d) => payModal(d.band, d.person),
+  'pay-set': (d) => { closeModal(); act(() => setMemberPay(ctx, d.band, d.person, d.amount ?? val('pay-amt'))); },
+  bonus: (d) => {
+    const band = ctx.state.bands[d.band];
+    const amt = Number(d.amount);
+    if (band.cash < amt) return payModal(d.band, d.person, fundBox(ctx.state, band, amt, `a ${money(amt)} bonus`));
+    closeModal();
+    act(() => giveBonus(ctx, d.band, d.person, amt));
+  },
+  'profile-open': () => {
+    const p = player(ctx.state);
+    ui.profile = { first: p.first, last: p.last, nickname: p.nickname || '', bio: p.bio || '', busy: [...(p.busy || [])] };
+    profileModal();
+  },
+  'profile-day': (d) => {
+    readProfileDraft();
+    const n = Number(d.day);
+    const b = ui.profile.busy;
+    ui.profile.busy = b.includes(n) ? b.filter((x) => x !== n) : [...b, n];
+    profileModal();
+  },
+  'profile-save': () => { readProfileDraft(); closeModal(); act(() => updateProfile(ctx, ui.profile)); },
+  'create-day': (d) => {
+    readCreate();
+    const n = Number(d.day);
+    const b = ui.create.busy;
+    ui.create.busy = b.includes(n) ? b.filter((x) => x !== n) : [...b, n];
+    render();
+  },
   post: (d) => act(() => socialPost(ctx, d.band, d.type)),
   fund: (d) => act(() => fundBand(ctx, d.band, Number(val('fund-amt')))),
-  'fund-quick': (d) => act(() => fundBand(ctx, d.band, Number(d.amount))),
+  'fund-quick': (d) => {
+    const again = reopenModal;
+    act(() => fundBand(ctx, d.band, Number(d.amount)));
+    if (again) again();
+  },
   payout: (d) => act(() => payout(ctx, d.band, Number(val('payout-amt')))),
   fire: (d) => confirmBox({ title: `Fire ${esc(ctx.state.people[d.person]?.first || 'them')}?`, body: '<p class="small muted">The band\'s morale takes a hit, and you\'ll need a replacement.</p>', yes: 'Fire', danger: true, onYes: () => act(() => fireMember(ctx, d.band, d.person)) }),
   'leave-band': (d) => {
@@ -335,12 +405,75 @@ const handlers = {
   }),
 };
 
+// ---------------------------------------------------------------------------
+// Modals with their own state
+// ---------------------------------------------------------------------------
+function releaseModal(bandId, recId, extra = '') {
+  reopenModal = () => releaseModal(bandId, recId);
+  const band = ctx.state.bands[bandId];
+  ensureMerch(band);
+  const rec = band.recordings.find((r) => r.id === recId);
+  if (!rec) return;
+  const opt = (format, batch, label, sub) => `<button class="btn" style="text-align:left" data-action="release-go" data-band="${bandId}" data-rec="${recId}" data-format="${format}" ${batch != null ? `data-batch="${batch}"` : ''}><b>${label}</b><br><span class="small muted">${sub}</span></button>`;
+  const discRows = Object.entries(DISC_FORMATS).map(([f, spec]) => `<h4 style="margin-top:.8rem">${spec.icon} Digital + ${spec.label}</h4><div class="batches">${spec.batches.map(([qty, unit], i) => opt(f, i, `${qty.toLocaleString()} ${spec.label} · ${money(Math.round(qty * unit))}`, `${unitPrice(unit)} each · sell for ${money(spec.price)} · arrive in ${spec.leadDays} days`)).join('')}</div>`).join('');
+  modal(`<h3>Release "${esc(rec.title)}"</h3>
+    <p class="small muted">Hype is ${Math.round(band.hype * 100)}%. Band fund: ${money(band.cash)}. Downloads start today either way. Physical copies sell at shows (and online) once they arrive, and make a big difference to what each show earns.</p>
+    ${extra}
+    <div class="batches">${opt('digital', null, '⬇️ Digital only', 'Free download links. No cost, no profit.')}</div>
+    ${discRows}
+    <div class="actions"><button class="btn ghost" data-action="close-modal">Not yet</button></div>`);
+}
+
+function payModal(bandId, personId, extra = '') {
+  reopenModal = () => payModal(bandId, personId);
+  const band = ctx.state.bands[bandId];
+  const m = ctx.state.people[personId];
+  if (!band || !m) return;
+  const cur = band.pay[personId] || 0;
+  const market = marketRate(m);
+  const suggest = market || 25;
+  modal(`<h3>Pay ${esc(shortName(m))}</h3>
+    <p>${esc(TIERS[m.tier])} · currently <b>${cur ? `${money(cur)} per practice/gig` : 'unpaid'}</b>. Going rate for them: <b>${market ? money(market) : 'nothing yet (amateur)'}</b>. Loyalty ${Math.round(m.loyalty)}.</p>
+    <p class="small muted">Raises boost loyalty (and paying an amateur who doesn't expect it really boosts it). Cuts hurt, and anyone cut far below their going rate may quit. Wages come out of the band fund every practice and gig.</p>
+    ${extra}
+    <h4>Set their rate</h4>
+    <div class="row">
+      <input type="number" id="pay-amt" min="0" step="5" value="${cur || suggest}" style="width:7rem">
+      <button class="btn primary" data-action="pay-set" data-band="${bandId}" data-person="${personId}">Save rate</button>
+      ${market && cur !== market ? `<button class="btn small" data-action="pay-set" data-band="${bandId}" data-person="${personId}" data-amount="${market}">Going rate (${money(market)})</button>` : ''}
+      ${cur ? `<button class="btn small" data-action="pay-set" data-band="${bandId}" data-person="${personId}" data-amount="${cur + 10}">Raise +$10</button><button class="btn small danger" data-action="pay-set" data-band="${bandId}" data-person="${personId}" data-amount="0">Stop paying</button>` : ''}
+    </div>
+    <h4 style="margin-top:1rem">One-time bonus (from the band fund: ${money(band.cash)})</h4>
+    <div class="row">${[25, 50, 100].map((n) => `<button class="btn small" data-action="bonus" data-band="${bandId}" data-person="${personId}" data-amount="${n}">${money(n)}</button>`).join('')}</div>
+    <div class="actions"><button class="btn ghost" data-action="close-modal">Close</button></div>`);
+}
+
+function readProfileDraft() {
+  if (!document.getElementById('pf-first')) return;
+  Object.assign(ui.profile, { first: val('pf-first'), last: val('pf-last'), nickname: val('pf-nick'), bio: val('pf-bio') });
+}
+
+function profileModal() {
+  const d = ui.profile;
+  const pay = expectedJobPay({ busy: d.busy });
+  modal(`<h3>Your profile</h3>
+    <div class="row"><label class="field" style="flex:1">First name<input type="text" id="pf-first" maxlength="20" value="${esc(d.first)}"></label>
+      <label class="field" style="flex:1">Last name<input type="text" id="pf-last" maxlength="20" value="${esc(d.last)}"></label>
+      <label class="field" style="flex:1">Stage name / nickname<input type="text" id="pf-nick" maxlength="16" value="${esc(d.nickname)}" placeholder="optional"></label></div>
+    <label class="field" style="margin-top:.6rem">Bio<textarea id="pf-bio" rows="4" maxlength="400" placeholder="Influences, how you got into music, what you're looking for in a band...">${esc(d.bio)}</textarea></label>
+    <h4 style="margin-top:1rem">Your evenings</h4>
+    ${dayToggles(d.busy, 'profile-day')}
+    <p class="small muted">Red evenings are your day-job shifts: about <b>${money(pay)}/week</b> (${money(SHIFT_PAY)} per shift). Bands you've joined avoid scheduling on them, and if you play or practice on a work night anyway, you skip that shift's pay. More shifts = more money, fewer free nights.</p>
+    <div class="actions"><button class="btn primary" data-action="profile-save">Save profile</button><button class="btn ghost" data-action="close-modal">Cancel</button></div>`);
+}
+
 function readCreate() {
   const c = ui.create;
   if (document.getElementById('c-first')) {
     c.first = val('c-first');
     c.last = val('c-last');
     c.seed = val('c-seed');
+    c.bio = val('c-bio') ?? c.bio;
   }
 }
 

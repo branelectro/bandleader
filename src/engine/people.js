@@ -2,8 +2,8 @@
 import {
   ATTRS, INSTRUMENTS, INSTRUMENT_IDS, GEAR_CATALOG, GEAR_BY_ID, FIRST_NAMES, LAST_NAMES, NICKNAMES,
   DAY_JOBS, EXTRAS, EXTRAS_BY_ID, AMATEUR_POINT_CAP,
-} from './data.js';
-import { clamp } from './rng.js';
+} from './data.js?v=3';
+import { clamp } from './rng.js?v=3';
 
 export const TIERS = ['amateur', 'semipro', 'pro'];
 export const TIER_LABELS = { amateur: 'Amateur', semipro: 'Semi-pro', pro: 'Professional' };
@@ -127,7 +127,9 @@ export function adjustReliability(p, delta) {
 
 // Chance this person can make an evening commitment on the given weekday.
 export function availabilityChance(p, weekday, kind = 'practice') {
-  if (p.isPlayer) return 1;
+  // The player always decides for themselves; this is only a planning signal
+  // (NPC leaders avoid your work nights, day pickers show them).
+  if (p.isPlayer) return (p.busy || []).includes(weekday) ? 0.2 : 1;
   const rel = p.attrs.reliability;
   if (p.tier === 'pro') return kind === 'overnight' ? 0.92 : 0.98;
   let base = p.busy.includes(weekday) ? 0.18 : 0.93;
@@ -265,13 +267,18 @@ export function extraEffect(p, key) {
   return v;
 }
 
-export function createPlayer({ first, last, instrument, vocals, attrs }) {
+// Default work nights: two quiet weeknights, leaving the weekend for shows.
+export const DEFAULT_PLAYER_BUSY = [0, 2];
+
+export function createPlayer({ first, last, instrument, vocals, attrs, busy = DEFAULT_PLAYER_BUSY, bio = '' }) {
   const total = ATTRS.reduce((s, a) => s + attrs[a], 0);
   if (total > AMATEUR_POINT_CAP) throw new Error(`Starting attributes exceed ${AMATEUR_POINT_CAP} points`);
   for (const a of ATTRS) if (attrs[a] < 1 || attrs[a] > 10) throw new Error('Attributes must be 1-10');
   return {
     id: 'player',
     first, last, nickname: null,
+    bio: String(bio || '').slice(0, 400),
+    profileVersion: 1,
     isPlayer: true,
     instrument,
     vocals: instrument === 'vocals' ? 'lead' : vocals,
@@ -280,7 +287,7 @@ export function createPlayer({ first, last, instrument, vocals, attrs }) {
     relMeter: 50,
     tier: 'amateur',
     job: 'part-time job',
-    busy: [],
+    busy: [...busy],
     gear: [],
     extras: [],
     rate: 0,

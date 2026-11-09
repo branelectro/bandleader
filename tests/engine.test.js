@@ -292,3 +292,91 @@ test('bands you joined ask before booking a show', () => {
   const expired = s.threads.filter((x) => x.kind === 'gigProposal' && x.outcome === 'No answer, so they passed.');
   assert.ok(expired.length >= 1, 'ignored proposals expire without booking');
 });
+
+async function ledBandWithDrummer(seed) {
+  const { startBand, addMember } = await import('../src/engine/recruiting.js');
+  const s = newGame(seed, spec);
+  const ctx = makeCtx(s);
+  const band = startBand(ctx, { name: 'B', genre: 'punk' });
+  const m = generatePerson(ctx.rng, { tier: 'amateur', instrument: 'drums', id: 'mdrums' });
+  s.people[m.id] = m; addMember(ctx, band, m);
+  return { s, ctx, band, m };
+}
+
+test('bigger merch and disc runs are cheaper per unit', async () => {
+  const { MERCH_ITEMS, DISC_FORMATS } = await import('../src/engine/merch.js');
+  for (const spec of [...Object.values(MERCH_ITEMS), ...Object.values(DISC_FORMATS)]) {
+    for (let i = 1; i < spec.batches.length; i++) {
+      assert.ok(spec.batches[i][0] > spec.batches[i - 1][0]);
+      assert.ok(spec.batches[i][1] < spec.batches[i - 1][1], `${spec.label} gets cheaper per unit`);
+    }
+  }
+  const [cd500, cd1000, cd5000] = DISC_FORMATS.cd.batches;
+  assert.deepEqual([cd500[0], cd1000[0], cd5000[0]], [500, 1000, 5000]);
+});
+
+test('ordered merch arrives and sells at shows, with the recap in the result', async () => {
+  const { orderMerch } = await import('../src/engine/merch.js');
+  const { resolveGig, makeOffer } = await import('../src/engine/gigs.js');
+  const { createEvent } = await import('../src/engine/schedule.js');
+  const { s, ctx, band } = await ledBandWithDrummer('merch-sale');
+  band.cash = 400;
+  assert.ok(!orderMerch(ctx, band.id, 'tshirts', 2).ok, 'cannot afford 100 shirts with 400');
+  assert.ok(orderMerch(ctx, band.id, 'stickers', 0).ok);
+  assert.ok(orderMerch(ctx, band.id, 'tshirts', 0).ok);
+  assert.equal(band.cash, 400 - 60 - 225);
+  for (let i = 0; i < 8; i++) advanceDay(ctx);
+  assert.equal(band.merch.tshirts.qty + band.merch.tshirts.sold, 25, 'shirts arrived');
+  band.followers = 300; band.songs = 8; band.tightness = 80;
+  s.people.player.gear.push('guitar-1-dented-strat-alike', 'guitarAmp-1-15w-practice-amp', 'mic-1-mystery-dynamic-mic', 'pa-1-garage-sale-pa');
+  const o = makeOffer(ctx, band, 1);
+  o.day = s.day; o.capacity = 200;
+  const e = createEvent(s, band, { type: 'gig', day: s.day, title: 'Show', data: { offer: o } });
+  const r = resolveGig(ctx, band, e, false);
+  assert.ok(r.merch, 'merch recap present');
+  assert.match(r.summary, /Merch: /);
+});
+
+test('leaders can raise pay, cut pay and give bonuses without being asked', async () => {
+  const { setMemberPay, giveBonus } = await import('../src/engine/economy.js');
+  const { ctx, band, m } = await ledBandWithDrummer('pay');
+  const before = m.loyalty;
+  assert.ok(setMemberPay(ctx, band.id, m.id, 30).ok);
+  assert.equal(band.pay[m.id], 30);
+  assert.ok(m.loyalty > before, 'raise helps loyalty');
+  band.cash = 10;
+  assert.ok(!giveBonus(ctx, band.id, m.id, 50).ok, 'bonus needs the money');
+  band.cash = 100;
+  const l2 = m.loyalty;
+  assert.ok(giveBonus(ctx, band.id, m.id, 50).ok);
+  assert.equal(band.cash, 50);
+  assert.ok(m.loyalty >= l2);
+  const r = setMemberPay(ctx, band.id, m.id, 0);
+  assert.ok(r.ok);
+  assert.ok(!band.pay[m.id], 'unpaid again');
+});
+
+test('work nights set day-job pay, and skipping one for a practice costs that shift', async () => {
+  const { updateProfile, expectedJobPay, SHIFT_PAY } = await import('../src/engine/economy.js');
+  const { schedulePractice } = await import('../src/engine/schedule.js');
+  const { s, ctx, band } = await ledBandWithDrummer('shifts');
+  const p = s.people.player;
+  assert.ok(updateProfile(ctx, { bio: 'Hi', busy: [1, 3, 5] }).ok);
+  assert.equal(expectedJobPay(p), 25 + 3 * SHIFT_PAY);
+  // practice on a Tuesday (weekday 1) = a work night
+  band.cash = 500; // room rent comes from the band, not your wallet
+  schedulePractice(ctx, band.id, 1);
+  const cash = s.cash;
+  for (let i = 0; i < 7; i++) advanceDay(ctx); // through next Monday's payday
+  assert.equal(s.cash - cash, expectedJobPay(p) - SHIFT_PAY, 'one shift docked');
+});
+
+test('a quality-50 studio recording books clubs that want 50+', async () => {
+  const { bookingCheck } = await import('../src/engine/gigs.js');
+  const { band } = await ledBandWithDrummer('q50');
+  band.songs = 10; band.standing = 1; band.followers = 1000;
+  band.recordings.push({ id: 'r1', type: 'student', done: true, quality: 50, production: 38, performance: 58 });
+  assert.ok(bookingCheck(band, 2).ok, JSON.stringify(bookingCheck(band, 2).reasons));
+  band.recordings = [{ id: 'r2', type: 'basement', done: true, quality: 60, production: 38, performance: 75 }];
+  assert.ok(!bookingCheck(band, 2).ok, 'basement demos still do not count');
+});

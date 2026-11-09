@@ -7,6 +7,7 @@
   "scripts": {
     "test": "node --test tests/*.test.js",
     "serve": "python3 -m http.server 8080",
-    "balance": "node tests/balance.mjs"
+    "balance": "node tests/balance.mjs",
+    "bump": "node scripts/bump-version.mjs"
   }
 }

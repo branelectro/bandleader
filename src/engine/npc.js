@@ -1,13 +1,13 @@
 // Leaders of bands the player joined: they run the calendar, book shows
 // (after asking you), record and post. The player can't edit their schedule.
-import { membersOf, bestRecording } from './band.js';
-import { availabilityChance } from './people.js';
-import { createEvent, eventsOn, cancelScheduled } from './schedule.js';
-import { weeklyOffers, bookingCheck } from './gigs.js';
-import { bookRecording, releaseRecording } from './studio.js';
-import { socialPost } from './social.js';
-import { weekday, news, dayLabel, createThread, addMessage, resolveThread } from './state.js';
-import { VENUE_TIERS } from './data.js';
+import { membersOf, bestRecording } from './band.js?v=3';
+import { availabilityChance } from './people.js?v=3';
+import { createEvent, eventsOn, cancelScheduled } from './schedule.js?v=3';
+import { weeklyOffers, bookingCheck } from './gigs.js?v=3';
+import { bookRecording, releaseRecording } from './studio.js?v=3';
+import { socialPost } from './social.js?v=3';
+import { weekday, news, dayLabel, createThread, addMessage, resolveThread } from './state.js?v=3';
+import { VENUE_TIERS } from './data.js?v=3';
 
 export function npcWeekly(ctx, band) {
   planPractices(ctx, band);
@@ -107,6 +107,7 @@ export function proposeGig(ctx, band, o) {
   }
   const clash = eventsOn(state, o.day).filter((e) => e.bandId !== band.id);
   if (clash.length) addMessage(t, null, `⚠ You're already booked that day: ${clash.map((e) => `${state.bands[e.bandId]?.name}: ${e.title}`).join(', ')}.`, state.day);
+  if ((state.people[state.playerId].busy || []).includes(weekday(o.day))) addMessage(t, null, '⚠ That\'s one of your work nights. Playing means skipping that shift\'s pay.', state.day);
   return t;
 }
 

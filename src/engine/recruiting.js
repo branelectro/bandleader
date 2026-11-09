@@ -1,8 +1,8 @@
 // Recruiting: the leader posts on social media, auditions trickle into the inbox.
-import { INSTRUMENTS, VOCAL_LABELS, EXTRAS_BY_ID, GENRES } from './data.js';
-import { generatePerson, cred, marketRate, displayName, roleLabel, extraEffect, shortName } from './people.js';
-import { createBand, membersOf, bandEffect } from './band.js';
-import { uid, player, createThread, resolveThread, news } from './state.js';
+import { INSTRUMENTS, VOCAL_LABELS, EXTRAS_BY_ID, GENRES } from './data.js?v=3';
+import { generatePerson, cred, marketRate, displayName, roleLabel, extraEffect, shortName } from './people.js?v=3';
+import { createBand, membersOf, bandEffect } from './band.js?v=3';
+import { uid, player, createThread, resolveThread, news } from './state.js?v=3';
 
 // Minimum band fund to credibly offer pay at a tier: ~8 events of wages.
 export function payGate(state, band, level) {
