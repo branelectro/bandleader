@@ -10,7 +10,9 @@ import { bookGig } from '../engine/gigs.js';
 import { bookRecording, releaseRecording } from '../engine/studio.js';
 import { socialPost } from '../engine/social.js';
 import { applyToOpening } from '../engine/scene.js';
-import { STUDIO_TYPES } from '../engine/data.js';
+import { STUDIO_TYPES, GEAR_BY_ID, GEAR_SLOTS } from '../engine/data.js';
+import { requiredSlots } from '../engine/people.js';
+import { SELL_BACK } from '../engine/economy.js';
 import { createView, dashboardView, inboxView, calendarView, shopView, sceneView } from './views.js';
 import { bandView } from './bandview.js';
 import { esc, money } from './util.js';
@@ -97,11 +99,12 @@ function render() {
 }
 
 let toastTimer = null;
-function toast(msg, bad = false) {
+// tone: true / 'bad' = error, 'good' = success, anything else = neutral.
+function toast(msg, tone = '') {
   if (!msg) return;
   const el = document.getElementById('toast');
   el.textContent = msg;
-  el.className = `toast show ${bad ? 'bad' : ''}`;
+  el.className = `toast show ${tone === true ? 'bad' : tone}`;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { el.className = 'toast'; }, 3800);
 }
@@ -110,7 +113,7 @@ function act(fn) {
   const res = fn();
   save();
   render();
-  if (res && res.msg) toast(res.msg, res.ok === false);
+  if (res && res.msg) toast(res.msg, res.ok === false ? 'bad' : 'good');
   return res;
 }
 
@@ -119,7 +122,16 @@ function modal(html) {
   m.innerHTML = `<div class="panel">${html}</div>`;
   m.classList.remove('hidden');
 }
-function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+function closeModal() { document.getElementById('modal').classList.add('hidden'); pendingConfirm = null; }
+
+// In-game "are you sure?" box. Native confirm() can be silently blocked by
+// the browser, which made buttons look broken.
+let pendingConfirm = null;
+function confirmBox({ title, body = '', yes = 'Confirm', danger = false, onYes }) {
+  modal(`<h3>${title}</h3>${body}<div class="actions"><button class="btn ${danger ? 'danger' : 'primary'}" data-action="confirm-yes">${yes}</button><button class="btn" data-action="close-modal">Cancel</button></div>`);
+  pendingConfirm = onYes;
+  document.querySelector('#modal [data-action=confirm-yes]')?.focus();
+}
 
 // ---------------------------------------------------------------------------
 // Time
@@ -183,9 +195,36 @@ const handlers = {
   'cal-band': (d) => { ui.calBand = d.band || null; render(); },
   'cal-day': (d) => { ui.calDay = Number(d.day); ui.eventId = null; render(); },
   cal: (d) => { ui.calOffset = Number(d.delta) === 0 ? 0 : ui.calOffset + Number(d.delta); render(); },
-  'cancel-event': (d) => { if (confirm('Cancel this event?')) act(() => cancelEvent(ctx, d.band, d.event)); },
-  sell: (d) => { if (confirm('Sell this item?')) act(() => sellGear(ctx, Number(d.index))); },
-  buy: (d) => act(() => buyGear(ctx, d.gear)),
+  'confirm-yes': () => { const fn = pendingConfirm; closeModal(); fn?.(); },
+  'cancel-event': (d) => confirmBox({ title: 'Cancel this event?', body: '<p class="small muted">Cancelling a show hurts your reputation with promoters.</p>', yes: 'Cancel it', danger: true, onYes: () => act(() => cancelEvent(ctx, d.band, d.event)) }),
+  sell: (d) => {
+    const p = player(ctx.state);
+    const g = GEAR_BY_ID[p.gear[Number(d.index)]];
+    if (!g) return;
+    const value = Math.round(g.price * SELL_BACK);
+    const left = p.gear.filter((id, i) => i !== Number(d.index) && GEAR_BY_ID[id]?.slot === g.slot).length;
+    const needed = requiredSlots(p).includes(g.slot) && !left;
+    confirmBox({
+      title: `Sell ${esc(g.name)}?`,
+      body: `<p>You'll get <b>${money(value)}</b> (half of the ${money(g.price)} it cost). Cash after: <b>${money(ctx.state.cash + value)}</b>.</p>${needed ? `<p class="warn small">This is your only ${esc(GEAR_SLOTS[g.slot].toLowerCase())}. You can't play shows without one.</p>` : ''}`,
+      yes: `Sell for ${money(value)}`,
+      danger: needed,
+      onYes: () => act(() => sellGear(ctx, Number(d.index))),
+    });
+  },
+  buy: (d) => {
+    const g = GEAR_BY_ID[d.gear];
+    const p = player(ctx.state);
+    const owned = p.gear.map((id) => GEAR_BY_ID[id]).filter((x) => x?.slot === g.slot);
+    const best = owned.reduce((m, x) => Math.max(m, x.tier), 0);
+    confirmBox({
+      title: `Buy ${esc(g.name)}?`,
+      body: `<p>${esc(GEAR_SLOTS[g.slot])} · Tier ${g.tier}. Costs <b>${money(g.price)}</b>. Cash after: <b>${money(ctx.state.cash - g.price)}</b>.</p>
+        ${owned.length ? `<p class="small ${g.tier > best ? 'good' : 'warn'}">You already own ${owned.map((x) => esc(x.name)).join(', ')}. ${g.tier > best ? 'This is an upgrade.' : 'This isn\'t an upgrade.'}</p>` : ''}`,
+      yes: `Buy for ${money(g.price)}`,
+      onYes: () => act(() => buyGear(ctx, d.gear)),
+    });
+  },
   'shop-filter': (d) => { ui.shopAll = d.all === '1'; render(); },
   woodshed: () => act(() => woodshed(ctx)),
   'nb-randname': () => { ui.newBand.name = generateBandName(createRng(Math.random() * 1e9)); render(); },
@@ -208,8 +247,12 @@ const handlers = {
   post: (d) => act(() => socialPost(ctx, d.band, d.type)),
   fund: (d) => act(() => fundBand(ctx, d.band, Number(val('fund-amt')))),
   payout: (d) => act(() => payout(ctx, d.band, Number(val('payout-amt')))),
-  fire: (d) => { if (confirm('Fire this member?')) act(() => fireMember(ctx, d.band, d.person)); },
-  'leave-band': (d) => { if (confirm('Are you sure? This can\'t be undone.')) { act(() => leaveBand(ctx, d.band)); ui.bandId = null; render(); } },
+  fire: (d) => confirmBox({ title: `Fire ${esc(ctx.state.people[d.person]?.first || 'them')}?`, body: '<p class="small muted">The band\'s morale takes a hit, and you\'ll need a replacement.</p>', yes: 'Fire', danger: true, onYes: () => act(() => fireMember(ctx, d.band, d.person)) }),
+  'leave-band': (d) => {
+    const b = ctx.state.bands[d.band];
+    const lead = b?.leaderId === ctx.state.playerId;
+    confirmBox({ title: lead ? `Break up ${esc(b.name)}?` : `Leave ${esc(b.name)}?`, body: '<p class="small muted">This can\'t be undone.</p>', yes: lead ? 'Break up' : 'Leave', danger: true, onYes: () => { ui.bandId = null; act(() => leaveBand(ctx, d.band)); } });
+  },
   'recruit-add': () => { ui.recruit.roles.push({ instrument: 'guitar', vocals: 'none' }); render(); },
   'recruit-del': (d) => { ui.recruit.roles.splice(Number(d.index), 1); render(); },
   'recruit-post': (d) => act(() => postRecruitment(ctx, d.band, { roles: ui.recruit.roles.map((r) => ({ ...r, vocals: r.instrument === 'vocals' ? 'lead' : r.vocals })), payLevel: ui.recruit.payLevel })),
@@ -230,14 +273,19 @@ const handlers = {
     } catch { toast('That doesn\'t look like a Bandleader save.', true); }
   },
   'close-modal': closeModal,
-  reset: () => {
-    if (!confirm('Start a new game? Your current save will be erased.')) return;
-    localStorage.removeItem(SAVE_KEY);
-    ctx = null;
-    ui.create.seed = randomSeed();
-    ui.tab = 'dashboard';
-    render();
-  },
+  reset: () => confirmBox({
+    title: 'Start a new game?',
+    body: '<p class="small muted">Your current save will be erased. Use Export save first if you want to keep it.</p>',
+    yes: 'Erase and restart',
+    danger: true,
+    onYes: () => {
+      localStorage.removeItem(SAVE_KEY);
+      ctx = null;
+      ui.create.seed = randomSeed();
+      ui.tab = 'dashboard';
+      render();
+    },
+  }),
 };
 
 function readCreate() {
@@ -279,7 +327,9 @@ document.addEventListener('change', (ev) => {
 });
 document.getElementById('modal').addEventListener('click', (ev) => { if (ev.target.id === 'modal') closeModal(); });
 document.addEventListener('keydown', (ev) => {
-  if (!ctx || ev.target.matches('input, textarea, select')) return;
+  const modalOpen = !document.getElementById('modal').classList.contains('hidden');
+  if (ev.key === 'Escape' && modalOpen) return closeModal();
+  if (!ctx || modalOpen || ev.target.matches('input, textarea, select')) return;
   if (ev.key === 'n') advance(1);
   if (ev.key === 'w') advance(7);
 });

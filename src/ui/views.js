@@ -284,6 +284,10 @@ export function shopView(state, ui) {
   const mine = ui.shopAll ? Object.keys(GEAR_SLOTS) : [...new Set([...requiredSlots(p), 'mic', 'pa'])];
   return `<div class="row between"><h2>Gear shop</h2><div class="row"><span>Cash: <b>${money(state.cash)}</b></span><button class="chip ${ui.shopAll ? '' : 'active'}" data-action="shop-filter" data-all="0">For your role</button><button class="chip ${ui.shopAll ? 'active' : ''}" data-action="shop-filter" data-all="1">Everything</button></div></div>
   <p class="muted small">Every member needs the gear for their role to play a show. Better gear raises your cred and the band's sound. A PA lets you play basement shows without renting one. You can sell back at ${Math.round(SELL_BACK * 100)}%.</p>
+  <div class="panel tight" style="margin-bottom:1rem">
+    <h3>Your gear</h3>
+    ${p.gear.length ? `<table class="simple">${p.gear.map((id, i) => { const g = GEAR_BY_ID[id]; return g ? `<tr><td>${esc(GEAR_SLOTS[g.slot])}</td><td>${esc(g.name)}</td><td><span class="tag">T${g.tier}</span></td><td style="text-align:right"><button class="btn small" data-action="sell" data-index="${i}">Sell for ${money(g.price * SELL_BACK)}</button></td></tr>` : ''; }).join('')}</table>` : '<p class="muted small">You don\'t own anything yet.</p>'}
+  </div>
   <div class="grid three">${mine.map((slot) => `<div class="panel tight"><h3>${GEAR_SLOTS[slot]}</h3>
     ${GEAR_CATALOG.filter((g) => g.slot === slot).map((g) => `<div class="row between" style="margin:.35rem 0"><div><div>${esc(g.name)}</div><div class="small muted">T${g.tier} · ${GEAR_TIERS[g.tier]}${p.gear.includes(g.id) ? ' · <span class="good">owned</span>' : ''}</div></div>
       <button class="btn small ${state.cash >= g.price ? 'primary' : ''}" data-action="buy" data-gear="${g.id}" ${state.cash < g.price ? 'disabled' : ''}>${money(g.price)}</button></div>`).join('')}

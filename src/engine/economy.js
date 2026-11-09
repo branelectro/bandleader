@@ -15,7 +15,7 @@ export function buyGear(ctx, catalogId) {
   if (state.cash < item.price) return { ok: false, msg: `You need $${item.price}; you have $${Math.round(state.cash)}.` };
   state.cash -= item.price;
   player(state).gear.push(item.id);
-  return { ok: true, msg: `Bought ${item.name}.` };
+  return { ok: true, msg: `✓ Bought ${item.name} for $${item.price}. You have $${Math.round(state.cash)} left.` };
 }
 
 export function sellGear(ctx, index) {
@@ -27,7 +27,7 @@ export function sellGear(ctx, index) {
   p.gear.splice(index, 1);
   const value = Math.round(item.price * SELL_BACK);
   state.cash += value;
-  return { ok: true, msg: `Sold ${item.name} for $${value}.` };
+  return { ok: true, msg: `✓ Sold ${item.name} for $${value}. You now have $${Math.round(state.cash)}.` };
 }
 
 export function fundBand(ctx, bandId, amount) {
