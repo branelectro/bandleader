@@ -1,4 +1,4 @@
-# Bandleader
+# Build-a-Band
 
 A browser RPG/sim about starting a local band from nothing. You make a musician, buy pawn-shop gear, post for members, sort through auditions, fight the calendar, play basements, record demos, and climb toward theaters.
 
@@ -91,4 +91,4 @@ Genres change what matters. Punk forgives skill and has a huge DIY scene. Prog n
 
 ## Monetization
 
-The footer has a "Buy me a coffee" link that points at `https://www.buymeacoffee.com/`. Replace it with your page in `index.html`.
+The footer has a "Buy me a coffee" link to https://buymeacoffee.com/branelectro (set in `index.html`).

@@ -9,7 +9,7 @@ export function payGate(state, band, level) {
   if (level === 'none') return { ok: true };
   const rate = level === 'pro' ? 180 : 45;
   const needCash = rate * 8;
-  if (band.cash < needCash) return { ok: false, msg: `Offering ${level === 'pro' ? 'pro' : 'semi-pro'} pay needs about $${needCash} in the band fund (you have $${Math.round(band.cash)}).` };
+  if (band.cash < needCash) return { ok: false, needCash, msg: `Offering ${level === 'pro' ? 'pro' : 'semi-pro'} pay needs about $${needCash} in the band fund (you have $${Math.round(band.cash)}).` };
   if (level === 'pro') {
     const p = player(state);
     if (band.standing < 2 && cred(p) < 45) return { ok: false, msg: 'Pros won\'t audition for a band below club level unless the leader has serious cred (45+).' };

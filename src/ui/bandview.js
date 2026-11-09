@@ -9,7 +9,7 @@ import { recordingCost } from '../engine/studio.js';
 import { payGate } from '../engine/recruiting.js';
 import { postsToday } from '../engine/social.js';
 import { eventsOn } from '../engine/schedule.js';
-import { esc, money, bar, stat, memberCard, bandDot } from './util.js';
+import { esc, money, bar, stat, memberCard, bandDot, fundBox } from './util.js';
 import { eventDetail, genreRuleText, eventButtons } from './views.js';
 
 const SECTIONS = [
@@ -59,6 +59,7 @@ function overview(state, ui, band, lead) {
         ${stat('Morale', Math.round(band.morale), bar(band.morale, 100, 'good'))}
         ${stat('Best recording', best ? best.quality : '—', best ? esc(STUDIO_TYPES[best.type].label) : 'none yet')}
       </div>
+      ${lead && payroll(state, band) > 0 && band.cash < payroll(state, band) * 2 ? fundBox(state, band, payroll(state, band) * 4, 'paying your members for the next 4 practices/gigs') : ''}
       ${lc.ok ? '<p class="good small">Lineup is complete. You can book shows and record.</p>' : `<div class="item bad"><b>Lineup not ready</b><ul class="small">${lc.problems.map((p) => `<li>${esc(p)}</li>`).join('')}</ul><p class="small muted">${genreRuleText(band.genre)}</p>${lead ? '<button class="btn small" data-action="band-section" data-section="recruit">Recruit</button>' : ''}</div>`}
       ${prog ? `<div><h4>Next standing: ${esc(prog.next)}</h4>
         <div class="attr"><span>Shows here</span>${bar(prog.shows, prog.showsNeeded)}<span class="num">${prog.shows}/${prog.showsNeeded}</span></div>
@@ -181,6 +182,7 @@ function studio(state, ui, band, lead) {
         <div><div class="small muted">Cost</div><b>${money(cost)}</b> <span class="small muted">(fund ${money(band.cash)})</span></div>
       </div>
       <p class="small ${perSong < 1 && st.type !== 'basement' ? 'warn' : 'muted'}">${perSong.toFixed(1)} sessions per song. ${perSong < 1 && (st.type === 'cheap' || st.type === 'pro') ? 'That\'s rushed: expect a sloppier mix and shakier takes.' : st.type === 'basement' ? 'Take as long as you want; it will still sound like a basement (production caps at 40).' : st.type === 'student' ? 'Sessions are overnight (unless someone has an audio-student roommate). Expect people to bail on 2am sessions.' : 'Plenty of time.'}</p>
+      ${!inProgress && cost > band.cash ? fundBox(state, band, cost, 'this recording') : ''}
       <button class="btn primary" data-action="record" data-band="${band.id}" ${inProgress || band.songs < 1 || cost > band.cash ? 'disabled' : ''}>Book sessions</button>
       ${inProgress ? '<p class="small warn">A recording is already in progress.</p>' : ''}` : ''}
       <p class="small muted">Polish isn't everything: a slick mix of a weak performance can sound lifeless, and a raw basement demo of a great band can connect. But bigger venues won't book off a basement demo.</p>
@@ -226,8 +228,10 @@ function moneyView(state, ui, band) {
   return `<div class="grid two">
     <div class="panel stack">
       <div class="stats">${stat('Band fund', money(band.cash))}${stat('Your cash', money(state.cash))}${stat('Payroll', `${money(payroll(state, band))}/event`)}${stat('Practice room', money(practiceRoomCost(state, band)))}</div>
-      <h3>Put money in</h3>
+      <h3>Put money in from your cash</h3>
       <p class="small muted">The fund pays for practice rooms, studio time, PA rentals, and paid members. Hiring semi-pros or pros needs a healthy fund.</p>
+      ${fundBox(state, band, (payroll(state, band) + practiceRoomCost(state, band)) * 4, 'the next 4 practices (wages + room)')}
+      <div class="row">${[50, 100, 250].map((n) => `<button class="btn small" data-action="fund-quick" data-band="${band.id}" data-amount="${n}" ${state.cash < n ? 'disabled' : ''}>+${money(n)}</button>`).join('')}</div>
       <div class="row"><input type="number" id="fund-amt" min="1" value="50" style="width:8rem"><button class="btn" data-action="fund" data-band="${band.id}">Add to fund</button></div>
     </div>
     <div class="panel stack">
@@ -257,7 +261,7 @@ function recruit(state, ui, band) {
       <div class="row"><button class="btn small" data-action="recruit-add">+ Add role</button></div>
       <label class="field">Offering pay?
         <select id="rc-pay" data-change="recruit-pay">${gates.map(({ lvl, g }) => `<option value="${lvl}" ${r.payLevel === lvl ? 'selected' : ''} ${g.ok ? '' : 'disabled'}>${{ none: 'No pay (amateurs)', semipro: 'Semi-pro rates (~$30-60/event)', pro: 'Pro rates ($150+/event)' }[lvl]}${g.ok ? '' : ' (locked)'}</option>`).join('')}</select></label>
-      ${gates.filter((x) => !x.g.ok).map((x) => `<p class="small muted">🔒 ${esc(x.g.msg)}</p>`).join('')}
+      ${gates.filter((x) => !x.g.ok).map((x) => `<p class="small muted">🔒 ${esc(x.g.msg)}</p>${x.g.needCash && band.cash < x.g.needCash ? fundBox(state, band, x.g.needCash, `offering ${x.lvl === 'pro' ? 'pro' : 'semi-pro'} pay`) : ''}`).join('')}
       <button class="btn primary" data-action="recruit-post" data-band="${band.id}" ${active || !r.roles.length ? 'disabled' : ''}>Post it</button>
     </div>
     <div class="panel">

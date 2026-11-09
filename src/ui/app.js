@@ -291,6 +291,7 @@ const handlers = {
   release: (d) => act(() => releaseRecording(ctx, d.band, d.rec)),
   post: (d) => act(() => socialPost(ctx, d.band, d.type)),
   fund: (d) => act(() => fundBand(ctx, d.band, Number(val('fund-amt')))),
+  'fund-quick': (d) => act(() => fundBand(ctx, d.band, Number(d.amount))),
   payout: (d) => act(() => payout(ctx, d.band, Number(val('payout-amt')))),
   fire: (d) => confirmBox({ title: `Fire ${esc(ctx.state.people[d.person]?.first || 'them')}?`, body: '<p class="small muted">The band\'s morale takes a hit, and you\'ll need a replacement.</p>', yes: 'Fire', danger: true, onYes: () => act(() => fireMember(ctx, d.band, d.person)) }),
   'leave-band': (d) => {
@@ -316,7 +317,7 @@ const handlers = {
       ctx = makeCtx(s);
       announceRepairs(repairSave(ctx));
       save(); closeModal(); render(); toast('Save loaded.');
-    } catch { toast('That doesn\'t look like a Bandleader save.', true); }
+    } catch { toast('That doesn\'t look like a Build-a-Band save.', true); }
   },
   'close-modal': closeModal,
   reset: () => confirmBox({

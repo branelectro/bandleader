@@ -4,10 +4,10 @@ import {
 } from '../engine/data.js';
 import { cred, credBreakdown, displayName, roleLabel, TIER_LABELS, requiredSlots, shortName, SEMIPRO_AT, PRO_AT, attrTotal, availabilityChance } from '../engine/people.js';
 import { player, playerBands, dayLabel, weekday } from '../engine/state.js';
-import { membersOf, lineupCheck } from '../engine/band.js';
+import { membersOf, lineupCheck, payroll } from '../engine/band.js';
 import { standingLabel } from '../engine/gigs.js';
 import { SELL_BACK } from '../engine/economy.js';
-import { esc, money, bar, stat, credBadge, attrRows, gearList, extrasList, daysStrip, memberCard, gearSlotSummary, bandColor, bandDot, EVENT_ICONS, EVENT_NAMES } from './util.js';
+import { esc, money, bar, stat, credBadge, attrRows, gearList, extrasList, daysStrip, memberCard, gearSlotSummary, bandColor, bandDot, EVENT_ICONS, EVENT_NAMES, fundBox } from './util.js';
 
 // ---------------------------------------------------------------------------
 // Character creation
@@ -17,7 +17,7 @@ export function createView(ui) {
   const used = ATTRS.reduce((s, a) => s + c.attrs[a], 0);
   const left = AMATEUR_POINT_CAP - used;
   const preview = { attrs: c.attrs, instrument: c.instrument, vocals: c.instrument === 'vocals' ? 'lead' : c.vocals, gear: [], extras: [] };
-  return `<div class="hero"><h1>BANDLEADER</h1><p class="muted">Start a band from nothing. Every scene, member and venue is generated fresh for each playthrough.</p></div>
+  return `<div class="hero"><h1>BUILD-A-BAND</h1><p class="muted">Start a band from nothing. Every scene, member and venue is generated fresh for each playthrough.</p></div>
   <div class="grid two">
     <div class="panel stack">
       <h2>Who are you?</h2>
@@ -189,11 +189,29 @@ function threadDetail(state, t) {
   }).join('');
   return `<h3>${esc(t.title)}</h3>${band ? `<div class="muted small" style="margin-bottom:.5rem">${esc(band.name)}</div>` : ''}
     ${t.kind === 'audition' ? body + '<hr>' + msgs : msgs + body}
+    ${threadFundBox(state, t, band)}
     ${t.actions.length ? `<div class="actions">${t.actions.map((a, i) => `<button class="btn ${i === 0 ? 'primary' : ''}" data-action="thread-act" data-thread="${t.id}" data-act="${a.id}">${esc(a.label)}</button>`).join('')}</div>` : ''}
     ${t.outcome ? `<p class="small muted" style="margin-top:.6rem">→ ${esc(t.outcome)}</p>` : ''}
     ${!t.actions.length && !t.outcome && !t.data?.npcLeader ? '<p class="small muted" style="margin-top:.6rem">Just letting you know: no reply needed.</p>' : ''}
     ${t.data?.npcLeader && !t.resolved ? `<p class="small muted">${esc(shortName(state.people[band.leaderId]))} runs this band and will decide ${t.actions.length ? 'once you answer (or tomorrow if you don\'t)' : 'tomorrow, after everyone has weighed in'}.</p>` : ''}
     ${t.expires && !t.resolved ? `<p class="small warn">Answer by ${dayLabel(t.expires)}.</p>` : ''}`;
+}
+
+// Money-related threads in bands you lead get a top-up box when the fund is short.
+function threadFundBox(state, t, band) {
+  if (!band || band.leaderId !== state.playerId) return '';
+  const wages = payroll(state, band);
+  if (t.kind === 'audition' && !t.resolved && t.data.rate) {
+    return fundBox(state, band, t.data.rate * 2, `hiring them (2 events of pay up front)`);
+  }
+  if (t.kind === 'payRequest' && !t.resolved) {
+    const raise = t.data.rate - (band.pay[t.data.personId] || 0);
+    return fundBox(state, band, (wages + raise) * 4, `covering the next 4 practices/gigs at the new payroll`);
+  }
+  if (t.kind === 'dm' && /money|paid/i.test(t.title + t.messages.map((m) => m.text).join(' ')) && wages > 0) {
+    return fundBox(state, band, wages * 4, 'the next 4 practices/gigs of wages');
+  }
+  return '';
 }
 
 function auditionFit(state, band, c, role) {

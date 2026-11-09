@@ -19,6 +19,21 @@ export function bandColor(state, band) {
 export function bandDot(state, band) {
   return `<span class="dot" style="background:${bandColor(state, band)}"></span>`;
 }
+// "The band fund is short" box with a one-click top-up from your own cash.
+export function fundBox(state, band, need, why) {
+  const short = Math.ceil(need - band.cash);
+  if (!band || short <= 0) return '';
+  const canAll = state.cash >= short;
+  return `<div class="item fund-box">
+    <div class="small">Band fund has <b>${money(band.cash)}</b>, but ${why} needs <b>${money(need)}</b>. Short by <b>${money(short)}</b>.</div>
+    <div class="row" style="margin-top:.35rem">
+      <button class="btn small primary" data-action="fund-quick" data-band="${band.id}" data-amount="${short}" ${canAll ? '' : 'disabled'}>Add ${money(short)} from your cash</button>
+      ${!canAll && state.cash >= 1 ? `<button class="btn small" data-action="fund-quick" data-band="${band.id}" data-amount="${Math.floor(state.cash)}">Add all you have (${money(state.cash)})</button>` : ''}
+      <span class="small muted">You have ${money(state.cash)}.</span>
+    </div>
+  </div>`;
+}
+
 export const EVENT_ICONS = { practice: '🥁', gig: '🎤', recording: '🎙️' };
 export const EVENT_NAMES = { practice: 'Practice', gig: 'Show', recording: 'Recording' };
 

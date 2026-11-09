@@ -38,7 +38,7 @@ export function fundBand(ctx, bandId, amount) {
   if (state.cash < amount) return { ok: false, msg: 'You don\'t have that much.' };
   state.cash -= amount;
   band.cash += amount;
-  return { ok: true, msg: `Put $${amount} into ${band.name}'s fund.` };
+  return { ok: true, msg: `✓ Put $${amount} into ${band.name}'s fund. Fund: $${Math.round(band.cash)} · your cash: $${Math.round(state.cash)}.` };
 }
 
 // Split money from the band fund among unpaid members (paid members already
