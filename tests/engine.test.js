@@ -189,3 +189,49 @@ test('member of an NPC band can ask to move a practice; leader decides next day'
   assert.ok(t.resolved, 'leader decided');
   assert.ok(t.messages.at(-1).from === band.leaderId);
 });
+
+test('in a joined band you can say you cannot make a show; it counts as excused', async () => {
+  const { giveNotice, withdrawNotice } = await import('../src/engine/schedule.js');
+  const s = newGame('notice', { ...spec, attrs: { skill: 4, experience: 2, charisma: 2, reliability: 2 } });
+  const ctx = makeCtx(s);
+  for (const o of s.openings) { o.instrument = 'guitar'; o.minCred = 0; }
+  applyToOpening(ctx, s.openings[0].id);
+  let band;
+  for (let i = 0; i < 10 && !band; i++) {
+    advanceDay(ctx);
+    const t = s.threads.find((x) => x.kind === 'joinOffer' && !x.resolved);
+    if (t) { threadAction(ctx, t.id, 'accept'); band = Object.values(s.bands)[0]; }
+  }
+  assert.ok(band);
+  let e;
+  for (let i = 0; i < 40 && !e; i++) { advanceDay(ctx); e = band.events.find((x) => x.status === 'scheduled' && x.day > s.day + 1); }
+  assert.ok(e, 'band scheduled something');
+  assert.ok(giveNotice(ctx, band.id, e.id).ok);
+  assert.ok(withdrawNotice(ctx, band.id, e.id).ok);
+  assert.ok(giveNotice(ctx, band.id, e.id).ok);
+  const me = s.people.player;
+  me.missedRecent = 0;
+  while (s.day < e.day) advanceDay(ctx);
+  assert.equal(e.status, 'done');
+  assert.ok(!e.result.present.includes('player'), 'you were not there');
+  assert.equal(me.missedRecent || 0, 0, 'not counted as a no-show');
+});
+
+test('cancelling a studio session still lets the recording finish', async () => {
+  const { startBand, addMember } = await import('../src/engine/recruiting.js');
+  const { bookRecording } = await import('../src/engine/studio.js');
+  const { cancelEvent } = await import('../src/engine/schedule.js');
+  const s = newGame('rec-cancel', spec);
+  const ctx = makeCtx(s);
+  const band = startBand(ctx, { name: 'R', genre: 'punk' });
+  const m = generatePerson(ctx.rng, { tier: 'amateur', instrument: 'drums', id: 'mdrums' });
+  s.people[m.id] = m; addMember(ctx, band, m);
+  s.people.player.gear.push('guitar-1-dented-strat-alike', 'guitarAmp-1-15w-practice-amp', 'mic-1-mystery-dynamic-mic');
+  band.songs = 3;
+  assert.ok(bookRecording(ctx, band.id, { type: 'basement', sessions: 3, songs: 2 }).ok);
+  const sessions = band.events.filter((e) => e.type === 'recording');
+  cancelEvent(ctx, band.id, sessions[2].id);
+  assert.equal(band.recordings[0].sessions, 2);
+  for (let i = 0; i < 6; i++) advanceDay(ctx);
+  assert.ok(band.recordings[0].done, 'recording finished after the remaining sessions');
+});

@@ -5,7 +5,7 @@ import { cred, TIER_LABELS } from '../engine/people.js';
 import { generateBandName, membersOf } from '../engine/band.js';
 import { startBand, postRecruitment, removeMember } from '../engine/recruiting.js';
 import { buyGear, sellGear, fundBand, payout, woodshed, fireMember, leaveBand } from '../engine/economy.js';
-import { schedulePractice, cancelEvent, requestReschedule, eventsOn } from '../engine/schedule.js';
+import { schedulePractice, cancelEvent, requestReschedule, eventsOn, giveNotice, withdrawNotice } from '../engine/schedule.js';
 import { bookGig } from '../engine/gigs.js';
 import { bookRecording, releaseRecording } from '../engine/studio.js';
 import { socialPost } from '../engine/social.js';
@@ -215,7 +215,7 @@ const handlers = {
       <p class="small muted">Propose a new day and the band will weigh in in the inbox. ${lead ? 'Then you decide.' : `Then ${esc(shortName(state.people[band.leaderId]))} decides.`} Numbers show how many bandmates are usually free that evening. ⚠ = you have another band that day.</p>
       <div class="daypick" style="margin:.6rem 0">${cells}</div>
       <div class="actions">
-        <button class="btn" data-action="resched-pick" data-band="${band.id}" data-event="${e.id}" data-cancel="1">${lead ? 'Ask about skipping it instead' : 'Ask to skip it'}</button>
+        ${e.type === "recording" ? "" : `<button class="btn" data-action="resched-pick" data-band="${band.id}" data-event="${e.id}" data-cancel="1">${lead ? 'Ask about skipping it instead' : 'Ask to skip it'}</button>`}
         <button class="btn ghost" data-action="close-modal">Never mind</button>
         ${lead ? `<span class="spacer"></span><button class="btn danger small" data-action="resched-force-cancel" data-band="${band.id}" data-event="${e.id}">Cancel now without asking</button>` : ''}
       </div>`);
@@ -225,6 +225,20 @@ const handlers = {
     const res = act(() => requestReschedule(ctx, d.band, d.event, d.cancel ? { cancel: true } : { day: Number(d.day) }));
     if (res?.ok && res.threadId) { ui.tab = 'inbox'; ui.threadId = res.threadId; ui.inboxFilter = 'all'; render(); }
   },
+  notice: (d) => {
+    const band = ctx.state.bands[d.band];
+    const e = band?.events.find((x) => x.id === d.event);
+    if (!e) return;
+    confirmBox({
+      title: `Skip ${esc(e.title)}?`,
+      body: `<p>You'll tell ${esc(band.name)} you can't make it on ${dayLabel(e.day, true)}.</p>
+        <p class="small muted">${e.type === 'gig' ? 'They\'ll play the show without you, which will hurt the set. ' : 'You won\'t learn what they work on. '}Giving notice costs a little reliability. Just not showing up costs a lot more.</p>`,
+      yes: 'Tell the band',
+      danger: e.type === 'gig',
+      onYes: () => act(() => giveNotice(ctx, d.band, d.event)),
+    });
+  },
+  'notice-undo': (d) => act(() => withdrawNotice(ctx, d.band, d.event)),
   'resched-force-cancel': (d) => { closeModal(); act(() => cancelEvent(ctx, d.band, d.event)); },
   'confirm-yes': () => { const fn = pendingConfirm; closeModal(); fn?.(); },
   'cancel-event': (d) => confirmBox({ title: 'Cancel this event?', body: '<p class="small muted">Cancelling a show hurts your reputation with promoters.</p>', yes: 'Cancel it', danger: true, onYes: () => act(() => cancelEvent(ctx, d.band, d.event)) }),

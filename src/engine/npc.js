@@ -9,18 +9,31 @@ import { socialPost } from './social.js';
 import { weekday, news } from './state.js';
 
 export function npcWeekly(ctx, band) {
+  planPractices(ctx, band);
+  npcBookAndRecord(ctx, band);
+}
+
+// Practices: two evenings a week that suit the most members, planned two
+// weeks ahead so members can see them coming (and ask to move them).
+export function planPractices(ctx, band) {
   const { state, rng } = ctx;
   const ms = membersOf(state, band);
-  // Practices: two evenings that suit the most members.
-  const scores = [];
-  for (let d = state.day + 1; d <= state.day + 6; d++) {
-    if (band.events.some((e) => e.day === d && e.status === 'scheduled')) continue;
-    const fit = ms.reduce((s, m) => s + availabilityChance(m, weekday(d)), 0);
-    scores.push({ d, fit: fit + rng.float(0, 0.4) });
+  for (const [from, to] of [[state.day + 1, state.day + 6], [state.day + 7, state.day + 13]]) {
+    const have = band.events.filter((e) => e.type === 'practice' && e.status === 'scheduled' && e.day >= from && e.day <= to).length;
+    if (have >= 2) continue;
+    const scores = [];
+    for (let d = from; d <= to; d++) {
+      if (band.events.some((e) => e.day === d && e.status === 'scheduled')) continue;
+      const fit = ms.reduce((s, m) => s + availabilityChance(m, weekday(d)), 0);
+      scores.push({ d, fit: fit + rng.float(0, 0.4) });
+    }
+    scores.sort((a, b) => b.fit - a.fit);
+    for (const { d } of scores.slice(0, 2 - have)) createEvent(state, band, { type: 'practice', day: d, title: 'Practice' });
   }
-  scores.sort((a, b) => b.fit - a.fit);
-  for (const { d } of scores.slice(0, 2)) createEvent(state, band, { type: 'practice', day: d, title: 'Practice' });
+}
 
+function npcBookAndRecord(ctx, band) {
+  const { state, rng } = ctx;
   // Shows: take the best offer the band qualifies for.
   weeklyOffers(ctx, band);
   const ok = band.offers.filter((o) => o.expires > state.day && o.day > state.day && bookingCheck(band, o.tier).ok && !band.events.some((e) => e.day === o.day && e.status === 'scheduled'));

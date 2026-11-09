@@ -5,10 +5,10 @@ import { seedScene, weeklySceneTick, processOpeningReplies, refreshOpenings, joi
 import { dailyRecruiting, acceptCandidate, declineCandidate } from './recruiting.js';
 import { rollAttendance, resolvePractice, answerReschedule, answerNpcReschedule, npcDecideReschedule, weeklyMemberChecks, EVENT_PRIORITY } from './schedule.js';
 import { resolveGig, weeklyOffers } from './gigs.js';
-import { resolveSession, dailyReleases } from './studio.js';
+import { resolveSession, dailyReleases, finishRecording } from './studio.js';
 import { dailySocial } from './social.js';
 import { checkTierChanges, answerPayRequest, answerFireRequest, weeklyIncome } from './economy.js';
-import { npcWeekly, npcDaily } from './npc.js';
+import { npcWeekly, npcDaily, planPractices } from './npc.js';
 import { removeMember } from './recruiting.js';
 import { shortName } from './people.js';
 
@@ -69,6 +69,8 @@ export function advanceDay(ctx) {
   for (const band of playerBands(state)) {
     dailySocial(ctx, band);
     dailyReleases(ctx, band);
+    // A recording whose remaining sessions were cancelled wraps up with what it has.
+    for (const rec of band.recordings) if (!rec.done && rec.sessionsDone >= rec.sessions) finishRecording(ctx, band, rec);
     if (band.npc) npcDaily(ctx, band);
     // Skills fade without practice.
     if (d - band.lastPracticeDay > 7) band.tightness = Math.max(0, band.tightness - 0.8);
@@ -148,7 +150,7 @@ export function threadAction(ctx, threadId, action) {
     case 'joinOffer':
       if (action === 'accept') {
         const band = joinSceneBand(ctx, t.data.openingId);
-        if (band) state.bands[band.id] = band;
+        if (band) { state.bands[band.id] = band; planPractices(ctx, band); }
         res = band ? { ok: true, msg: `You're in ${band.name}!` } : { ok: false, msg: 'The spot is gone.' };
       } else res = { ok: true, msg: 'Passed.' };
       resolveThread(t, res.msg);

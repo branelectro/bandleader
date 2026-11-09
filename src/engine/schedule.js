@@ -52,13 +52,24 @@ export function schedulePractice(ctx, bandId, day) {
   return { ok: true, msg: clash.length ? `Scheduled, but you're also booked with another band on ${dayLabel(day)}!` : `Practice set for ${dayLabel(day, true)}.` };
 }
 
+// Every cancellation goes through here. A cancelled studio session comes off
+// the recording's plan so the recording still finishes with what was tracked.
+export function cancelScheduled(band, e) {
+  e.status = 'cancelled';
+  if (e.type !== 'recording') return;
+  const rec = band.recordings.find((r) => r.id === e.data.recordingId);
+  if (!rec || rec.done) return;
+  rec.sessions = Math.max(0, rec.sessions - 1);
+  if (rec.sessions === 0) band.recordings = band.recordings.filter((r) => r !== rec);
+}
+
 export function cancelEvent(ctx, bandId, eventId) {
   const { state } = ctx;
   const band = state.bands[bandId];
   const e = band?.events.find((x) => x.id === eventId);
   if (!e || e.status !== 'scheduled') return { ok: false, msg: 'Nothing to cancel.' };
   if (band.leaderId !== state.playerId) return { ok: false, msg: 'Only the band leader can edit the schedule.' };
-  e.status = 'cancelled';
+  cancelScheduled(band, e);
   if (e.type === 'gig') {
     band.followers = Math.max(0, Math.round(band.followers * 0.97));
     band.engagement = Math.max(0, band.engagement - 8);
@@ -164,7 +175,7 @@ export function npcDecideReschedule(ctx, t, playerCan) {
   if (t.data.cancelProposal) {
     const agree = votes.filter((m) => t.data[`can_${m.id}`]).length;
     if (agree >= votes.length / 2) {
-      e.status = 'cancelled';
+      cancelScheduled(band, e);
       addMessage(t, leader.id, 'Fine, we\'ll skip this one.', state.day);
       resolveThread(t, `${e.title} cancelled.`);
     } else {
@@ -190,7 +201,49 @@ export function npcDecideReschedule(ctx, t, playerCan) {
 // You ask the band to move (or skip) an event. Everyone replies in a group
 // thread; then the leader decides: you, if it's your band, or the NPC
 // leader the next day.
-export const RESCHEDULABLE = ['practice'];
+export const RESCHEDULABLE = ['practice', 'recording'];
+
+// "I can't make it": tell a band you're not coming, ahead of time. Excused
+// absence (small reliability dip) instead of a no-show (big one).
+export function giveNotice(ctx, bandId, eventId) {
+  const { state, rng } = ctx;
+  const band = state.bands[bandId];
+  const e = band?.events.find((x) => x.id === eventId);
+  if (!e || e.status !== 'scheduled') return { ok: false, msg: 'That event is no longer scheduled.' };
+  if (band.leaderId === state.playerId) return { ok: false, msg: 'You run this band: reschedule or cancel instead.' };
+  e.notice = e.notice || [];
+  if (e.notice.includes(state.playerId)) return { ok: false, msg: 'You already told them.' };
+  e.notice.push(state.playerId);
+  e.forceOk = (e.forceOk || []).filter((id) => id !== state.playerId);
+  adjustReliability(player(state), -4);
+  const leader = state.people[band.leaderId];
+  const t = createThread(state, {
+    kind: 'bandChat', bandId: band.id,
+    title: `${band.name}: you can't make ${e.title.toLowerCase()}`,
+    from: state.playerId,
+    text: `Hey all, sorry, I can't make ${e.title.toLowerCase()} on ${dayLabel(e.day, true)}.`,
+  });
+  if (e.type === 'gig') {
+    band.morale = Math.max(0, band.morale - 5);
+    addMessage(t, leader.id, rng.pick(['Ugh. OK, we\'ll play it without you.', 'Seriously? Fine, we\'ll figure it out.', 'That hurts, but thanks for telling us early.']), state.day);
+  } else {
+    band.morale = Math.max(0, band.morale - 1);
+    addMessage(t, leader.id, rng.pick(['No worries, catch up next time.', 'OK, we\'ll go over the new stuff with you later.', 'Thanks for the heads up.']), state.day);
+  }
+  t.unread = false;
+  return { ok: true, msg: `Told ${band.name} you can't make it. ${e.type === 'gig' ? 'They\'ll play without you.' : ''}` };
+}
+
+export function withdrawNotice(ctx, bandId, eventId) {
+  const { state } = ctx;
+  const band = state.bands[bandId];
+  const e = band?.events.find((x) => x.id === eventId);
+  if (!e || !e.notice?.includes(state.playerId)) return { ok: false, msg: 'Nothing to take back.' };
+  e.notice = e.notice.filter((id) => id !== state.playerId);
+  adjustReliability(player(state), 3);
+  createThread(state, { kind: 'bandChat', bandId: band.id, title: `${band.name}: you can make it after all`, from: state.playerId, text: `Good news, I can make ${e.title.toLowerCase()} on ${dayLabel(e.day, true)} after all!` }).unread = false;
+  return { ok: true, msg: `You're back in for ${e.title.toLowerCase()}.` };
+}
 
 export function requestReschedule(ctx, bandId, eventId, { day = null, cancel = false } = {}) {
   const { state, rng } = ctx;
@@ -305,7 +358,7 @@ export function answerReschedule(ctx, thread, action) {
     return { ok: true, msg: 'Kept the original day.' };
   }
   if (action === 'cancel') {
-    e.status = 'cancelled';
+    cancelScheduled(band, e);
     addMessage(thread, state.playerId, 'Let\'s just skip this one.', state.day);
     resolveThread(thread, 'Cancelled.');
     return { ok: true, msg: `${e.title} cancelled.` };
@@ -322,7 +375,8 @@ export function resolveAttendance(ctx, band, e, playerBusy) {
   const noShow = [];
   for (const m of membersOf(state, band)) {
     if (m.isPlayer) {
-      (playerBusy ? noShow : present).push(m);
+      if (e.notice?.includes(m.id)) absentNotice.push(m);
+      else (playerBusy ? noShow : present).push(m);
       continue;
     }
     if (e.forceOk?.includes(m.id)) { present.push(m); continue; }

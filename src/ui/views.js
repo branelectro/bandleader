@@ -283,9 +283,18 @@ export function eventDetail(state, b, e) {
 export function eventButtons(state, b, e) {
   if (e.status !== 'scheduled') return '';
   const lead = b.leaderId === state.playerId;
-  if (e.type === 'practice') return `<button class="btn small" data-action="resched-open" data-band="${b.id}" data-event="${e.id}">${lead ? 'Reschedule / cancel…' : 'Ask to reschedule / skip…'}</button>`;
-  if (lead) return `<button class="btn danger small" data-action="cancel-event" data-band="${b.id}" data-event="${e.id}">Cancel ${e.type === 'gig' ? '(hurts your rep)' : 'session'}</button>`;
-  return '';
+  const ids = `data-band="${b.id}" data-event="${e.id}"`;
+  const out = [];
+  // Practices and studio sessions can be moved; shows are booked with a venue.
+  if (e.type === 'practice') out.push(`<button class="btn small" data-action="resched-open" ${ids}>${lead ? 'Reschedule / cancel…' : 'Ask to reschedule / skip…'}</button>`);
+  if (e.type === 'recording') out.push(`<button class="btn small" data-action="resched-open" ${ids}>${lead ? 'Move session…' : 'Ask to move session…'}</button>`);
+  if (lead && e.type !== 'practice') out.push(`<button class="btn danger small" data-action="cancel-event" ${ids}>Cancel ${e.type === 'gig' ? 'show (hurts your rep)' : 'session'}</button>`);
+  if (!lead) {
+    out.push(e.notice?.includes(state.playerId)
+      ? `<span class="tag warn">you said you can't make it</span><button class="btn small ghost" data-action="notice-undo" ${ids}>Actually, I can make it</button>`
+      : `<button class="btn small ${e.type === 'gig' ? 'danger' : 'ghost'}" data-action="notice" ${ids}>I can't make it…</button>`);
+  }
+  return out.join('');
 }
 
 // ---------------------------------------------------------------------------
