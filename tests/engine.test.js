@@ -235,3 +235,26 @@ test('cancelling a studio session still lets the recording finish', async () => 
   for (let i = 0; i < 6; i++) advanceDay(ctx);
   assert.ok(band.recordings[0].done, 'recording finished after the remaining sessions');
 });
+
+test('old saves with a cancelled session still counted get repaired', async () => {
+  const { startBand, addMember } = await import('../src/engine/recruiting.js');
+  const { bookRecording } = await import('../src/engine/studio.js');
+  const { repairSave } = await import('../src/engine/sim.js');
+  const s = newGame('old-save', spec);
+  const ctx = makeCtx(s);
+  const band = startBand(ctx, { name: 'R', genre: 'punk' });
+  const m = generatePerson(ctx.rng, { tier: 'amateur', instrument: 'drums', id: 'mdrums' });
+  s.people[m.id] = m; addMember(ctx, band, m);
+  s.people.player.gear.push('guitar-1-dented-strat-alike', 'guitarAmp-1-15w-practice-amp', 'mic-1-mystery-dynamic-mic');
+  band.songs = 3;
+  bookRecording(ctx, band.id, { type: 'basement', sessions: 3, songs: 2 });
+  // Simulate the old bug: last session cancelled without updating the recording.
+  band.events.filter((e) => e.type === 'recording')[2].status = 'cancelled';
+  for (let i = 0; i < 6; i++) advanceDay(ctx);
+  const rec = band.recordings[0];
+  assert.ok(rec.done, 'finishes during play');
+  // And straight from a stuck save on load:
+  rec.done = false; rec.sessions = 3;
+  const fixed = repairSave(makeCtx(JSON.parse(JSON.stringify(s))));
+  assert.equal(fixed.length, 1);
+});

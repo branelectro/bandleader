@@ -69,8 +69,7 @@ export function advanceDay(ctx) {
   for (const band of playerBands(state)) {
     dailySocial(ctx, band);
     dailyReleases(ctx, band);
-    // A recording whose remaining sessions were cancelled wraps up with what it has.
-    for (const rec of band.recordings) if (!rec.done && rec.sessionsDone >= rec.sessions) finishRecording(ctx, band, rec);
+    repairRecordings(ctx, band);
     if (band.npc) npcDaily(ctx, band);
     // Skills fade without practice.
     if (d - band.lastPracticeDay > 7) band.tightness = Math.max(0, band.tightness - 0.8);
@@ -129,6 +128,32 @@ function expireThreads(ctx) {
 }
 
 // One entry point for every inbox button.
+// An unfinished recording's plan = sessions already tracked + sessions still on
+// the calendar. Anything else (cancelled or missed sessions, including ones
+// cancelled in older versions of the game) is dropped, and a recording with
+// nothing left to track wraps up with what it has. Returns titles finished.
+export function repairRecordings(ctx, band) {
+  const finished = [];
+  for (const rec of band.recordings.slice()) {
+    if (rec.done) continue;
+    const left = band.events.filter((e) => e.type === 'recording' && e.data?.recordingId === rec.id && e.status === 'scheduled').length;
+    const planned = rec.sessionsDone + left;
+    if (planned >= rec.sessions) continue;
+    rec.sessions = planned;
+    if (planned === 0) { band.recordings = band.recordings.filter((r) => r !== rec); continue; }
+    if (left === 0) { finishRecording(ctx, band, rec); finished.push(rec.title); }
+  }
+  return finished;
+}
+
+// Run on every load: fixes saves made by older versions.
+export function repairSave(ctx) {
+  const out = [];
+  for (const band of Object.values(ctx.state.bands)) out.push(...repairRecordings(ctx, band));
+  commit(ctx);
+  return out;
+}
+
 export function threadAction(ctx, threadId, action) {
   const { state } = ctx;
   const t = state.threads.find((x) => x.id === threadId);

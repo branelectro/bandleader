@@ -1,4 +1,4 @@
-import { newGame, advanceDay, threadAction } from '../engine/sim.js';
+import { newGame, advanceDay, threadAction, repairSave } from '../engine/sim.js';
 import { makeCtx, commit, player, playerBands, dayLabel, weekday, SAVE_VERSION } from '../engine/state.js';
 import { createRng } from '../engine/rng.js';
 import { cred, TIER_LABELS } from '../engine/people.js';
@@ -314,6 +314,7 @@ const handlers = {
       const s = JSON.parse(val('imp'));
       if (s.version !== SAVE_VERSION || !s.people) throw new Error('bad');
       ctx = makeCtx(s);
+      announceRepairs(repairSave(ctx));
       save(); closeModal(); render(); toast('Save loaded.');
     } catch { toast('That doesn\'t look like a Bandleader save.', true); }
   },
@@ -381,7 +382,16 @@ document.addEventListener('keydown', (ev) => {
 
 const saved = load();
 if (saved) ctx = makeCtx(saved);
+const repaired = ctx ? repairSave(ctx) : [];
 render();
+announceRepairs(repaired);
+
+function announceRepairs(titles) {
+  if (!titles.length) return;
+  save();
+  render();
+  toast(`Fixed your save: ${titles.map((t) => `"${t}"`).join(', ')} finished with the sessions you recorded. Check the Studio tab to release it.`, 'good');
+}
 
 // Exposed for debugging in the console.
 window.bandleader = { get state() { return ctx?.state; }, removeMember };
