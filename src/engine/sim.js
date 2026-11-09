@@ -8,7 +8,7 @@ import { resolveGig, weeklyOffers } from './gigs.js';
 import { resolveSession, dailyReleases, finishRecording } from './studio.js';
 import { dailySocial } from './social.js';
 import { checkTierChanges, answerPayRequest, answerFireRequest, weeklyIncome } from './economy.js';
-import { npcWeekly, npcDaily, planPractices } from './npc.js';
+import { npcWeekly, npcDaily, planPractices, answerGigProposal, expireGigProposal } from './npc.js';
 import { removeMember } from './recruiting.js';
 import { shortName } from './people.js';
 
@@ -121,6 +121,8 @@ function expireThreads(ctx) {
         news(state, `${shortName(m)} quit ${band.name} after you ignored their pay request.`, { bandId: band.id, tone: 'bad' });
       }
       resolveThread(t, 'You never answered. They quit.');
+    } else if (t.kind === 'gigProposal') {
+      expireGigProposal(ctx, t);
     } else {
       resolveThread(t, 'Expired.');
     }
@@ -171,6 +173,9 @@ export function threadAction(ctx, threadId, action) {
       break;
     case 'fire':
       res = answerFireRequest(ctx, t, action);
+      break;
+    case 'gigProposal':
+      res = answerGigProposal(ctx, t, action);
       break;
     case 'joinOffer':
       if (action === 'accept') {

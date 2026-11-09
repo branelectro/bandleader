@@ -154,7 +154,7 @@ function bandSummaryCard(state, b) {
 // ---------------------------------------------------------------------------
 // Inbox
 // ---------------------------------------------------------------------------
-const KIND_LABEL = { audition: 'Audition', reschedule: 'Schedule', payRequest: 'Pay request', fire: 'Band drama', joinOffer: 'Offer', result: 'Result', dm: 'DM', bandChat: 'Band chat', note: 'Note' };
+const KIND_LABEL = { audition: 'Audition', reschedule: 'Schedule', payRequest: 'Pay request', fire: 'Band drama', joinOffer: 'Offer', gigProposal: 'Show offer', result: 'Result', dm: 'DM', bandChat: 'Band chat', note: 'Note' };
 
 export function inboxView(state, ui) {
   const threads = state.threads.slice().sort((a, b) => (a.resolved - b.resolved) || (b.day - a.day));

@@ -258,3 +258,37 @@ test('old saves with a cancelled session still counted get repaired', async () =
   const fixed = repairSave(makeCtx(JSON.parse(JSON.stringify(s))));
   assert.equal(fixed.length, 1);
 });
+
+test('bands you joined ask before booking a show', () => {
+  const s = newGame('gig-approval', { ...spec, attrs: { skill: 4, experience: 2, charisma: 2, reliability: 2 } });
+  const ctx = makeCtx(s);
+  for (const o of s.openings) { o.instrument = 'guitar'; o.minCred = 0; }
+  applyToOpening(ctx, s.openings[0].id);
+  let band;
+  for (let i = 0; i < 10 && !band; i++) {
+    advanceDay(ctx);
+    const t = s.threads.find((x) => x.kind === 'joinOffer' && !x.resolved);
+    if (t) { threadAction(ctx, t.id, 'accept'); band = Object.values(s.bands)[0]; }
+  }
+  assert.ok(band);
+  const known = new Set(band.events.filter((e) => e.type === 'gig').map((e) => e.id));
+  const newGigs = () => band.events.filter((e) => e.type === 'gig' && !known.has(e.id));
+  const outcomes = { in: 0, out: 0, ignored: 0 };
+  let n = 0;
+  for (let i = 0; i < 200; i++) {
+    advanceDay(ctx);
+    assert.equal(newGigs().length, 0, 'no show appears without your answer');
+    const t = s.threads.find((x) => x.kind === 'gigProposal' && !x.resolved && !x.seen);
+    if (!t) continue;
+    t.seen = true;
+    const choice = ['in', 'out', 'ignored'][n++ % 3];
+    if (choice === 'ignored') { outcomes.ignored++; continue; }
+    threadAction(ctx, t.id, choice);
+    assert.equal(newGigs().length, choice === 'in' ? 1 : 0, `answering "${choice}"`);
+    for (const e of newGigs()) known.add(e.id);
+    outcomes[choice]++;
+  }
+  assert.ok(outcomes.in && outcomes.out && outcomes.ignored, `saw all three outcomes ${JSON.stringify(outcomes)}`);
+  const expired = s.threads.filter((x) => x.kind === 'gigProposal' && x.outcome === 'No answer, so they passed.');
+  assert.ok(expired.length >= 1, 'ignored proposals expire without booking');
+});

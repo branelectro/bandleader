@@ -78,7 +78,7 @@ Genres change what matters. Punk forgives skill and has a huge DIY scene. Prog n
 5. **Time:** the game is turn-based by day ("Next day" / "Next week"). "Next week" stops early when a new decision lands in your inbox.
 6. **A part-time job** gives the player a small weekly income, so a broke player isn't permanently stuck. Paying yourself from bands is still the real growth path.
 7. **Paid tiers are gated by the band fund.** Offering semi-pro pay requires about 8 events' worth of wages in the fund. Pros also need club standing or a leader with 45+ cred.
-8. **Joining other bands:** the Scene board lists bands with openings and a cred target. If they accept you, their NPC leader runs the calendar, bookings, recordings and socials. You can't edit their schedule, and double-booking yourself across bands makes you miss one event (and costs reliability).
+8. **Joining other bands:** the Scene board lists bands with openings and a cred target. If they accept you, their NPC leader runs the calendar, recordings and socials. You can't edit their schedule, but you can ask to move or skip practices and studio sessions, give notice that you can't make something, and every show is proposed to you first: it's only booked if you say you're in. Double-booking yourself across bands still makes you miss one event (and costs reliability).
 
 ## Multiplayer: recommendation
 
