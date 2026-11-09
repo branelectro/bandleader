@@ -9,7 +9,7 @@ import { recordingCost } from '../engine/studio.js';
 import { payGate } from '../engine/recruiting.js';
 import { postsToday } from '../engine/social.js';
 import { eventsOn } from '../engine/schedule.js';
-import { esc, money, bar, stat, memberCard } from './util.js';
+import { esc, money, bar, stat, memberCard, bandDot } from './util.js';
 import { eventDetail, genreRuleText } from './views.js';
 
 const SECTIONS = [
@@ -28,9 +28,9 @@ export function bandView(state, ui) {
   const content = {
     overview, members, schedule, shows, studio, social, money: moneyView, recruit,
   }[sec] || overview;
-  return `${bands.length > 1 ? `<div class="subnav">${bands.map((b) => `<button class="chip ${b.id === band.id ? 'active' : ''}" data-action="open-band" data-band="${b.id}">${esc(b.name)}</button>`).join('')}</div>` : ''}
+  return `${bands.length > 1 ? `<div class="subnav">${bands.map((b) => `<button class="chip ${b.id === band.id ? 'active' : ''}" data-action="open-band" data-band="${b.id}">${bandDot(state, b)}${esc(b.name)}</button>`).join('')}</div>` : ''}
     <div class="row between" style="margin-bottom:.5rem">
-      <div><h2 style="margin:0">${esc(band.name)}</h2><div class="muted small">${GENRES[band.genre].label} · ${band.memberIds.length} members · ${esc(standingLabel(band.standing))} standing${lead ? ' · you lead' : ` · led by ${esc(shortName(state.people[band.leaderId]))}`}</div></div>
+      <div><h2 style="margin:0">${bandDot(state, band)}${esc(band.name)}</h2><div class="muted small">${GENRES[band.genre].label} · ${band.memberIds.length} members · ${esc(standingLabel(band.standing))} standing${lead ? ' · you lead' : ` · led by ${esc(shortName(state.people[band.leaderId]))}`}</div></div>
     </div>
     <div class="subnav">${sections.map(([k, l]) => `<button class="chip ${sec === k ? 'active' : ''}" data-action="band-section" data-section="${k}">${l}</button>`).join('')}</div>
     ${content(state, ui, band, lead)}`;

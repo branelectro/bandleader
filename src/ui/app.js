@@ -180,6 +180,7 @@ const handlers = {
   'inbox-filter': (d) => { ui.inboxFilter = d.filter; ui.threadId = null; render(); },
   'thread-act': (d) => act(() => threadAction(ctx, d.thread, d.act)),
   'open-event': (d) => { ui.eventId = d.event; ui.calDay = null; render(); },
+  'cal-band': (d) => { ui.calBand = d.band || null; render(); },
   'cal-day': (d) => { ui.calDay = Number(d.day); ui.eventId = null; render(); },
   cal: (d) => { ui.calOffset = Number(d.delta) === 0 ? 0 : ui.calOffset + Number(d.delta); render(); },
   'cancel-event': (d) => { if (confirm('Cancel this event?')) act(() => cancelEvent(ctx, d.band, d.event)); },

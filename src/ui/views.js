@@ -7,7 +7,7 @@ import { player, playerBands, dayLabel, weekday } from '../engine/state.js';
 import { membersOf, lineupCheck } from '../engine/band.js';
 import { standingLabel } from '../engine/gigs.js';
 import { SELL_BACK } from '../engine/economy.js';
-import { esc, money, bar, stat, credBadge, attrRows, gearList, extrasList, daysStrip, memberCard, gearSlotSummary } from './util.js';
+import { esc, money, bar, stat, credBadge, attrRows, gearList, extrasList, daysStrip, memberCard, gearSlotSummary, bandColor, bandDot, EVENT_ICONS, EVENT_NAMES } from './util.js';
 
 // ---------------------------------------------------------------------------
 // Character creation
@@ -139,7 +139,7 @@ function bandSummaryCard(state, b) {
   const next = b.events.filter((e) => e.status === 'scheduled').sort((x, y) => x.day - y.day)[0];
   const lc = lineupCheck(b, membersOf(state, b));
   return `<div class="item" style="margin-top:.6rem">
-    <div class="row between"><div><b>${esc(b.name)}</b> <span class="muted small">${GENRES[b.genre].label} · ${b.memberIds.length} members${b.leaderId === state.playerId ? ' · you lead' : ''}</span></div>
+    <div class="row between"><div>${bandDot(state, b)}<b>${esc(b.name)}</b> <span class="muted small">${GENRES[b.genre].label} · ${b.memberIds.length} members${b.leaderId === state.playerId ? ' · you lead' : ''}</span></div>
       <button class="btn small" data-action="open-band" data-band="${b.id}">Open</button></div>
     <div class="stats" style="margin-top:.5rem">
       ${stat('Followers', b.followers.toLocaleString())}
@@ -211,19 +211,25 @@ function auditionFit(state, band, c, role) {
 export function calendarView(state, ui) {
   const start = state.day - weekday(state.day) + (ui.calOffset || 0) * 7 - 7;
   const days = Array.from({ length: 35 }, (_, i) => start + i);
-  const bands = playerBands(state);
+  const allBands = playerBands(state);
+  if (ui.calBand && !allBands.some((b) => b.id === ui.calBand)) ui.calBand = null;
+  const bands = ui.calBand ? allBands.filter((b) => b.id === ui.calBand) : allBands;
   const evs = {};
   for (const b of bands) for (const e of b.events) { (evs[e.day] = evs[e.day] || []).push({ b, e }); }
-  const sel = ui.eventId && bands.flatMap((b) => b.events.map((e) => ({ b, e }))).find((x) => x.e.id === ui.eventId);
+  const sel = ui.eventId && allBands.flatMap((b) => b.events.map((e) => ({ b, e }))).find((x) => x.e.id === ui.eventId);
   const selDay = ui.calDay ?? (sel ? sel.e.day : null);
-  return `<div class="row between" style="margin-bottom:.6rem">
+  return `${allBands.length > 1 ? `<div class="subnav">
+      <button class="chip ${!ui.calBand ? 'active' : ''}" data-action="cal-band" data-band="">All bands</button>
+      ${allBands.map((b) => `<button class="chip ${ui.calBand === b.id ? 'active' : ''}" data-action="cal-band" data-band="${b.id}">${bandDot(state, b)}${esc(b.name)}</button>`).join('')}
+    </div>` : ''}
+    <div class="row between" style="margin-bottom:.6rem">
       <div class="row"><button class="btn small" data-action="cal" data-delta="-1">‹ Earlier</button><button class="btn small" data-action="cal" data-delta="0">Today</button><button class="btn small" data-action="cal" data-delta="1">Later ›</button></div>
-      <div class="legend"><span><i style="background:var(--practice)"></i>Practice</span><span><i style="background:var(--gig)"></i>Show</span><span><i style="background:var(--recording)"></i>Recording</span></div>
+      <div class="legend">${Object.keys(EVENT_ICONS).map((t) => `<span>${EVENT_ICONS[t]} ${EVENT_NAMES[t]}</span>`).join('')}</div>
     </div>
     <div class="cal">${DAY_NAMES.map((d) => `<div class="dow">${d}</div>`).join('')}
     ${days.map((d) => d < 0 ? '<div class="day past"></div>' : `<div class="day clickable ${d === state.day ? 'today' : ''} ${d < state.day ? 'past' : ''} ${d === selDay ? 'selected' : ''}" data-action="cal-day" data-day="${d}">
       <div class="d">Day ${d + 1}${weekday(d) === 0 ? ` <span class="muted">· wk ${Math.floor(d / 7) + 1}</span>` : ''}${d === state.day ? ' <span class="warn">· today</span>' : ''}</div>
-      ${(evs[d] || []).map(({ b, e }) => `<button class="ev ${e.type} ${e.status}" data-action="open-event" data-event="${e.id}" title="${esc(b.name)}: ${esc(e.title)}">${esc(b.name.split(' ')[0])}: ${esc(e.title)}</button>`).join('')}
+      ${(evs[d] || []).map(({ b, e }) => `<button class="ev ${e.type} ${e.status}" style="--band:${bandColor(state, b)}" data-action="open-event" data-event="${e.id}" title="${esc(b.name)}: ${esc(e.title)} (${e.status})">${EVENT_ICONS[e.type]} ${esc(bands.length > 1 ? b.name : e.title)}</button>`).join('')}
     </div>`).join('')}</div>
     ${selDay != null ? `<div class="panel" style="margin-top:1rem">${dayPanel(state, selDay, sel)}</div>` : '<p class="muted small" style="margin-top:.6rem">Click a day to see what\'s on it or schedule a practice. Click an event for details.</p>'}`;
 }
@@ -234,7 +240,7 @@ function dayPanel(state, day, sel) {
   const items = bands.flatMap((b) => b.events.filter((e) => e.day === day).map((e) => ({ b, e })));
   const parts = [`<h3>${dayLabel(day, true)} <span class="muted small">(day ${day + 1})</span></h3>`];
   if (sel) parts.push(eventDetail(state, sel.b, sel.e));
-  else if (items.length) parts.push(`<div class="list">${items.map(({ b, e }) => `<div class="item ${e.type}"><div class="row between"><b>${esc(e.title)}</b><span class="tag">${esc(b.name)}</span></div>${e.result ? `<div class="small">${esc(e.result.summary)}</div>` : ''}<button class="btn small ghost" data-action="open-event" data-event="${e.id}">Details</button></div>`).join('')}</div>`);
+  else if (items.length) parts.push(`<div class="list">${items.map(({ b, e }) => `<div class="item" style="border-left-color:${bandColor(state, b)}"><div class="row between"><b>${EVENT_ICONS[e.type]} ${esc(e.title)}</b><span class="tag">${bandDot(state, b)}${esc(b.name)}</span></div>${e.result ? `<div class="small">${esc(e.result.summary)}</div>` : ''}<button class="btn small ghost" data-action="open-event" data-event="${e.id}">Details</button></div>`).join('')}</div>`);
   else parts.push('<p class="muted small">Nothing on this day.</p>');
 
   if (day > state.day) {
@@ -246,8 +252,8 @@ function dayPanel(state, day, sel) {
       const free = ms.filter((m) => availabilityChance(m, weekday(day)) > 0.5);
       const busy = ms.filter((m) => !free.includes(m));
       const other = items.some(({ b: ob, e }) => ob.id !== b.id && e.status === 'scheduled');
-      parts.push(`<div class="item practice" style="margin-top:.5rem">
-        <div class="row between"><b>${esc(b.name)}</b>${ms.length < 2 ? '<span class="small muted">needs another member first</span>' : taken ? '<span class="small muted">already has something this day</span>' : `<button class="btn small primary" data-action="schedule" data-band="${b.id}" data-day="${day}">Schedule practice</button>`}</div>
+      parts.push(`<div class="item" style="margin-top:.5rem;border-left-color:${bandColor(state, b)}">
+        <div class="row between"><b>${bandDot(state, b)}${esc(b.name)}</b>${ms.length < 2 ? '<span class="small muted">needs another member first</span>' : taken ? '<span class="small muted">already has something this day</span>' : `<button class="btn small primary" data-action="schedule" data-band="${b.id}" data-day="${day}">Schedule practice</button>`}</div>
         ${ms.length >= 2 ? `<div class="small">Usually free: <b class="${busy.length ? 'warn' : 'good'}">${free.length}/${ms.length}</b>${busy.length ? ` · usually busy: ${busy.map(shortName).join(', ')}` : ''}</div>` : ''}
         ${other ? '<div class="small warn">⚠ You already have another band that day.</div>' : ''}
       </div>`);
@@ -262,7 +268,7 @@ export function eventDetail(state, b, e) {
   const lead = b.leaderId === state.playerId;
   const people = (ids) => (ids || []).map((id) => state.people[id]).filter(Boolean).map(shortName).join(', ');
   const rolls = e.rolled && e.status === 'scheduled' ? Object.entries(e.rolls).filter(([, v]) => v === 'notice').map(([id]) => state.people[id]).filter(Boolean) : [];
-  return `<div class="row between"><h3>${esc(e.title)}</h3><span class="tag">${esc(b.name)}</span></div>
+  return `<div class="row between"><h3>${EVENT_ICONS[e.type]} ${esc(e.title)}</h3><span class="tag">${bandDot(state, b)}${esc(b.name)}</span></div>
     <p class="muted">${dayLabel(e.day, true)} · ${e.status}</p>
     ${e.type === 'gig' ? `<p>${esc(VENUE_TIERS[e.data.offer.tier].label)} · cap ${e.data.offer.capacity} · with ${e.data.offer.bill.map((x) => `${esc(x.name)} (${x.followers})`).join(', ')}</p>` : ''}
     ${rolls.length ? `<p class="warn small">Gave notice they can't make it: ${rolls.map(shortName).join(', ')}</p>` : ''}

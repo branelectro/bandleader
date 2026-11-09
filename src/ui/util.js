@@ -6,6 +6,22 @@ export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&a
 export const money = fmtMoney;
 export const pct = (v) => `${Math.round(v)}%`;
 
+// Each band keeps one color for its whole life (stored on the band so it
+// survives saves and never shifts when you join or leave other bands).
+export const BAND_COLORS = ['#6cb7ff', '#ff8a5c', '#59d38c', '#c792ff', '#ffd25c', '#ff6fb5', '#4fd6d0', '#b5e35a'];
+export function bandColor(state, band) {
+  if (!band.color) {
+    const used = new Set(Object.values(state.bands).map((b) => b.color).filter(Boolean));
+    band.color = BAND_COLORS.find((c) => !used.has(c)) || BAND_COLORS[Object.keys(state.bands).indexOf(band.id) % BAND_COLORS.length];
+  }
+  return band.color;
+}
+export function bandDot(state, band) {
+  return `<span class="dot" style="background:${bandColor(state, band)}"></span>`;
+}
+export const EVENT_ICONS = { practice: '🥁', gig: '🎤', recording: '🎙️' };
+export const EVENT_NAMES = { practice: 'Practice', gig: 'Show', recording: 'Recording' };
+
 export function bar(value, max = 100, cls = '') {
   const w = Math.max(0, Math.min(100, (value / max) * 100));
   return `<div class="bar ${cls}"><span style="width:${w}%"></span></div>`;
