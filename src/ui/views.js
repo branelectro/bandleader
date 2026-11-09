@@ -116,7 +116,7 @@ function nextSteps(state) {
   const tips = [];
   const missing = requiredSlots(p).filter((s) => !p.gear.some((id) => GEAR_BY_ID[id]?.slot === s));
   if (missing.length) tips.push(`Buy gear you need to play: ${missing.map((s) => GEAR_SLOTS[s]).join(', ')}. <button class="btn small" data-action="tab" data-tab="shop">Shop</button>`);
-  const pending = state.threads.filter((t) => !t.resolved).length;
+  const pending = state.threads.filter((t) => !t.resolved && t.actions.length).length;
   if (pending) tips.push(`${pending} message(s) waiting for your answer. <button class="btn small" data-action="tab" data-tab="inbox">Inbox</button>`);
   const bands = playerBands(state);
   if (!bands.length) tips.push('Start a band or audition for one. <button class="btn small" data-action="tab" data-tab="scene">Scene</button>');
@@ -165,7 +165,7 @@ export function inboxView(state, ui) {
   <div class="inbox">
     <div class="thread-list">${shown.map((t) => `<button class="thread-btn ${sel && sel.id === t.id ? 'active' : ''} ${!t.resolved ? 'pending' : ''}" data-action="open-thread" data-thread="${t.id}">
       <div class="t">${t.unread ? '● ' : ''}${esc(t.title)}</div>
-      <div class="s">${KIND_LABEL[t.kind] || t.kind} · ${dayLabel(t.day)}${!t.resolved ? ' · <span class="warn">needs answer</span>' : ''}</div>
+      <div class="s">${KIND_LABEL[t.kind] || t.kind} · ${dayLabel(t.day)}${!t.resolved && t.actions.length ? ' · <span class="warn">needs answer</span>' : !t.resolved ? ' · waiting on leader' : ''}</div>
     </button>`).join('') || '<p class="muted">Empty.</p>'}</div>
     <div class="panel">${sel ? threadDetail(state, sel) : '<p class="muted">Select a message.</p>'}</div>
   </div>`;
@@ -191,8 +191,8 @@ function threadDetail(state, t) {
     ${t.kind === 'audition' ? body + '<hr>' + msgs : msgs + body}
     ${t.actions.length ? `<div class="actions">${t.actions.map((a, i) => `<button class="btn ${i === 0 ? 'primary' : ''}" data-action="thread-act" data-thread="${t.id}" data-act="${a.id}">${esc(a.label)}</button>`).join('')}</div>` : ''}
     ${t.outcome ? `<p class="small muted" style="margin-top:.6rem">→ ${esc(t.outcome)}</p>` : ''}
-    ${!t.actions.length && !t.outcome ? '<p class="small muted" style="margin-top:.6rem">Just letting you know: no reply needed.</p>' : ''}
-    ${t.data?.npcLeader && !t.resolved ? `<p class="small muted">${esc(shortName(state.people[band.leaderId]))} runs this band and will decide once you answer (or tomorrow if you don't).</p>` : ''}
+    ${!t.actions.length && !t.outcome && !t.data?.npcLeader ? '<p class="small muted" style="margin-top:.6rem">Just letting you know: no reply needed.</p>' : ''}
+    ${t.data?.npcLeader && !t.resolved ? `<p class="small muted">${esc(shortName(state.people[band.leaderId]))} runs this band and will decide ${t.actions.length ? 'once you answer (or tomorrow if you don\'t)' : 'tomorrow, after everyone has weighed in'}.</p>` : ''}
     ${t.expires && !t.resolved ? `<p class="small warn">Answer by ${dayLabel(t.expires)}.</p>` : ''}`;
 }
 
@@ -275,7 +275,17 @@ export function eventDetail(state, b, e) {
     ${e.type === 'gig' ? `<p>${esc(VENUE_TIERS[e.data.offer.tier].label)} · cap ${e.data.offer.capacity} · with ${e.data.offer.bill.map((x) => `${esc(x.name)} (${x.followers})`).join(', ')}</p>` : ''}
     ${rolls.length ? `<p class="warn small">Gave notice they can't make it: ${rolls.map(shortName).join(', ')}</p>` : ''}
     ${e.result ? `<p>${esc(e.result.summary)}</p>${e.result.present ? `<p class="small muted">Present: ${people(e.result.present)}</p>` : ''}` : ''}
-    ${lead && e.status === 'scheduled' ? `<button class="btn danger small" data-action="cancel-event" data-band="${b.id}" data-event="${e.id}">Cancel ${e.type === 'gig' ? '(hurts your rep)' : ''}</button>` : ''}`;
+    <div class="row">${eventButtons(state, b, e)}</div>`;
+}
+
+// Practices go through the band (propose a new day or skipping it). Shows and
+// studio sessions are booked with someone else, so the leader can only cancel.
+export function eventButtons(state, b, e) {
+  if (e.status !== 'scheduled') return '';
+  const lead = b.leaderId === state.playerId;
+  if (e.type === 'practice') return `<button class="btn small" data-action="resched-open" data-band="${b.id}" data-event="${e.id}">${lead ? 'Reschedule / cancel…' : 'Ask to reschedule / skip…'}</button>`;
+  if (lead) return `<button class="btn danger small" data-action="cancel-event" data-band="${b.id}" data-event="${e.id}">Cancel ${e.type === 'gig' ? '(hurts your rep)' : 'session'}</button>`;
+  return '';
 }
 
 // ---------------------------------------------------------------------------

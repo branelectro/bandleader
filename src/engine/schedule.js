@@ -160,8 +160,20 @@ export function npcDecideReschedule(ctx, t, playerCan) {
   const leader = state.people[band.leaderId];
   const asker = state.people[t.data.askerId];
   const proposed = t.data.proposed;
-  if (playerCan === undefined) playerCan = !playerConflicts(state, proposed).length;
   const votes = membersOf(state, band).filter((m) => !m.isPlayer && m.id !== t.data.askerId);
+  if (t.data.cancelProposal) {
+    const agree = votes.filter((m) => t.data[`can_${m.id}`]).length;
+    if (agree >= votes.length / 2) {
+      e.status = 'cancelled';
+      addMessage(t, leader.id, 'Fine, we\'ll skip this one.', state.day);
+      resolveThread(t, `${e.title} cancelled.`);
+    } else {
+      addMessage(t, leader.id, `We need it, so ${e.title.toLowerCase()} on ${dayLabel(e.day)} is still on.`, state.day);
+      resolveThread(t, `Kept ${dayLabel(e.day)}.`);
+    }
+    return;
+  }
+  if (playerCan === undefined) playerCan = t.data.askerId === state.playerId || !playerConflicts(state, proposed).length;
   const yes = votes.filter((m) => t.data[`can_${m.id}`]).length;
   const free = proposed > state.day && !band.events.some((x) => x.id !== e.id && x.day === proposed && x.status === 'scheduled');
   if (playerCan && free && yes >= votes.length / 2) {
@@ -173,6 +185,72 @@ export function npcDecideReschedule(ctx, t, playerCan) {
     addMessage(t, leader.id, `Sorry ${asker ? shortName(asker) : ''}, ${why}, so we're keeping ${dayLabel(e.day)}.`, state.day);
     resolveThread(t, `Kept ${dayLabel(e.day)}.`);
   }
+}
+
+// You ask the band to move (or skip) an event. Everyone replies in a group
+// thread; then the leader decides: you, if it's your band, or the NPC
+// leader the next day.
+export const RESCHEDULABLE = ['practice'];
+
+export function requestReschedule(ctx, bandId, eventId, { day = null, cancel = false } = {}) {
+  const { state, rng } = ctx;
+  const band = state.bands[bandId];
+  const e = band?.events.find((x) => x.id === eventId);
+  if (!e || e.status !== 'scheduled') return { ok: false, msg: 'That event is no longer scheduled.' };
+  if (!RESCHEDULABLE.includes(e.type)) return { ok: false, msg: 'Only practices can be moved.' };
+  if (state.threads.some((t) => !t.resolved && t.kind === 'reschedule' && t.data.eventId === e.id)) return { ok: false, msg: 'There\'s already an open conversation about this one. Check your inbox.' };
+  if (!cancel) {
+    if (day == null || day <= state.day) return { ok: false, msg: 'Pick a future day.' };
+    if (day === e.day) return { ok: false, msg: 'That\'s the day it\'s already on.' };
+    if (band.events.some((x) => x.day === day && x.status === 'scheduled')) return { ok: false, msg: 'The band already has something that day.' };
+  }
+  const lead = band.leaderId === state.playerId;
+  const others = membersOf(state, band).filter((m) => !m.isPlayer);
+  const what = e.title.toLowerCase();
+  const t = createThread(state, {
+    kind: 'reschedule',
+    bandId: band.id,
+    title: `${band.name}: ${cancel ? 'skip' : 'move'} ${what} on ${dayLabel(e.day)}?`,
+    from: state.playerId,
+    text: cancel
+      ? `Hey all, can we skip ${what} on ${dayLabel(e.day)}?`
+      : `Hey all, can we move ${what} from ${dayLabel(e.day, true)} to ${dayLabel(day, true)}?`,
+    data: { eventId: e.id, askerId: state.playerId, proposed: cancel ? null : day, cancelProposal: cancel, playerInitiated: true },
+  });
+
+  let yes = 0;
+  const showSoon = band.events.some((x) => x.type === 'gig' && x.status === 'scheduled' && x.day >= state.day && x.day - e.day <= 7);
+  for (const m of others) {
+    let ok;
+    let line;
+    if (cancel) {
+      // Members push back when the band needs the work.
+      const needIt = showSoon || band.tightness < 40 || m.attrs.reliability >= 7;
+      ok = !needIt || rng.chance(0.25);
+      line = ok ? rng.pick(['No worries, I could use the night off.', 'Fine by me.', 'Sure, skip it 👍'])
+        : showSoon ? 'We have a show coming up, we really need this practice.' : rng.pick(['I\'d rather not, we\'re still pretty rough.', 'Can we not? We need the reps.']);
+    } else {
+      ok = availabilityChance(m, weekday(day), e.type) > 0.5;
+      line = ok ? rng.pick([`${DAY_NAMES_LONG[weekday(day)]} works for me.`, 'I can do that.', 'Fine by me 👍'])
+        : rng.pick([`I can't do ${DAY_NAMES_LONG[weekday(day)]}, I work.`, `${DAY_NAMES_LONG[weekday(day)]} is bad for me.`, 'Ugh, no, that day is rough for me.']);
+    }
+    t.data[`can_${m.id}`] = ok;
+    if (ok) yes++;
+    addMessage(t, m.id, line, state.day);
+  }
+  t.unread = false; // you started it
+
+  if (lead) {
+    t.actions = cancel
+      ? [{ id: 'cancel', label: `Cancel it (${yes}/${others.length} agree)` }, { id: 'keep', label: 'Keep it on' }]
+      : [{ id: 'move', label: `Move to ${dayLabel(day)} (${yes}/${others.length} can make it)` }, { id: 'keep', label: `Keep ${dayLabel(e.day)}` }, { id: 'cancel', label: 'Cancel it' }];
+  } else {
+    t.data.npcLeader = true;
+    t.data.decideBy = state.day + 1;
+  }
+  t.resolved = false;
+  const summary = cancel ? `${yes}/${others.length} are OK skipping it.` : `${yes}/${others.length} can make ${dayLabel(day)}.`;
+  return { ok: true, threadId: t.id, msg: `Asked the band. ${summary}${lead ? ' Your call.' : ` ${shortName(state.people[band.leaderId])} will decide tomorrow.`}` };
 }
 
 export function answerNpcReschedule(ctx, t, action) {
@@ -220,9 +298,10 @@ export function answerReschedule(ctx, thread, action) {
     return { ok: true, msg: `${e.title} moved to ${dayLabel(e.day, true)}.` };
   }
   if (action === 'keep') {
-    addMessage(thread, state.playerId, `We're keeping ${dayLabel(e.day)}. Sorry ${asker ? shortName(asker) : ''}.`, state.day);
+    const mine = thread.data.askerId === state.playerId;
+    addMessage(thread, state.playerId, mine ? `Never mind, we'll stick with ${dayLabel(e.day)}.` : `We're keeping ${dayLabel(e.day)}. Sorry ${asker ? shortName(asker) : ''}.`, state.day);
     resolveThread(thread, 'Kept the original day.');
-    if (asker) asker.loyalty = Math.max(0, asker.loyalty - 2);
+    if (asker && !mine) asker.loyalty = Math.max(0, asker.loyalty - 2);
     return { ok: true, msg: 'Kept the original day.' };
   }
   if (action === 'cancel') {

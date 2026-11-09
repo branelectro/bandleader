@@ -10,7 +10,7 @@ import { payGate } from '../engine/recruiting.js';
 import { postsToday } from '../engine/social.js';
 import { eventsOn } from '../engine/schedule.js';
 import { esc, money, bar, stat, memberCard, bandDot } from './util.js';
-import { eventDetail, genreRuleText } from './views.js';
+import { eventDetail, genreRuleText, eventButtons } from './views.js';
 
 const SECTIONS = [
   ['overview', 'Overview'], ['members', 'Members'], ['schedule', 'Practice'], ['shows', 'Shows'],
@@ -115,7 +115,7 @@ function schedule(state, ui, band, lead) {
     <div class="panel">
       <h3>Upcoming</h3>
       <div class="list">${upcoming.map((e) => `<div class="item ${e.type}"><div class="row between"><b>${esc(e.title)}</b><span class="small muted">${dayLabel(e.day)}</span></div>
-        <div class="row" style="margin-top:.25rem"><button class="btn small ghost" data-action="open-event" data-event="${e.id}" data-stay="1">Details</button>${lead ? `<button class="btn small ghost" data-action="cancel-event" data-band="${band.id}" data-event="${e.id}">Cancel</button>` : ''}</div></div>`).join('') || '<p class="muted small">Nothing yet.</p>'}</div>
+        <div class="row" style="margin-top:.25rem"><button class="btn small ghost" data-action="open-event" data-event="${e.id}" data-stay="1">Details</button>${eventButtons(state, band, e)}</div></div>`).join('') || '<p class="muted small">Nothing yet.</p>'}</div>
       ${sel ? `<div style="margin-top:1rem">${eventDetail(state, band, sel)}</div>` : ''}
     </div>
   </div>`;

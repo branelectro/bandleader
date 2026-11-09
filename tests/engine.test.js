@@ -132,3 +132,60 @@ test('you can vote on reschedules in a band someone else leads', () => {
   }
   assert.ok(answered > 0, 'at least one reschedule request came up');
 });
+
+test('leader proposes moving or skipping a practice; band weighs in', async () => {
+  const { startBand, addMember } = await import('../src/engine/recruiting.js');
+  const { schedulePractice, requestReschedule } = await import('../src/engine/schedule.js');
+  const s = newGame('leader-resched', spec);
+  const ctx = makeCtx(s);
+  const band = startBand(ctx, { name: 'Test', genre: 'punk' });
+  for (const inst of ['drums', 'bass']) {
+    const m = generatePerson(ctx.rng, { tier: 'amateur', instrument: inst, id: 'm' + inst });
+    s.people[m.id] = m;
+    addMember(ctx, band, m);
+  }
+  schedulePractice(ctx, band.id, 3);
+  const e = band.events[0];
+  const r = requestReschedule(ctx, band.id, e.id, { day: 5 });
+  assert.ok(r.ok, r.msg);
+  const t = s.threads.find((x) => x.id === r.threadId);
+  assert.equal(t.messages.length, 3, 'you + two bandmates replied');
+  assert.deepEqual(t.actions.map((a) => a.id), ['move', 'keep', 'cancel']);
+  assert.ok(!requestReschedule(ctx, band.id, e.id, { day: 6 }).ok, 'only one open request per event');
+  threadAction(ctx, t.id, 'move');
+  assert.equal(e.day, 5);
+  const r2 = requestReschedule(ctx, band.id, e.id, { cancel: true });
+  threadAction(ctx, r2.threadId, 'cancel');
+  assert.equal(e.status, 'cancelled');
+});
+
+test('member of an NPC band can ask to move a practice; leader decides next day', async () => {
+  const { requestReschedule } = await import('../src/engine/schedule.js');
+  const s = newGame('member-resched', { ...spec, attrs: { skill: 4, experience: 2, charisma: 2, reliability: 2 } });
+  const ctx = makeCtx(s);
+  const o = s.openings[0];
+  o.instrument = 'guitar'; o.minCred = 0;
+  applyToOpening(ctx, o.id);
+  let band;
+  for (let i = 0; i < 10 && !band; i++) {
+    advanceDay(ctx);
+    const t = s.threads.find((x) => x.kind === 'joinOffer' && !x.resolved);
+    if (t) { threadAction(ctx, t.id, 'accept'); band = Object.values(s.bands)[0]; }
+  }
+  let e;
+  for (let i = 0; i < 14 && !e; i++) {
+    advanceDay(ctx);
+    e = band.events.find((x) => x.type === 'practice' && x.status === 'scheduled' && x.day > s.day + 1);
+  }
+  assert.ok(e, 'NPC leader scheduled a practice');
+  let target = s.day + 1;
+  while (band.events.some((x) => x.day === target && x.status === 'scheduled')) target++;
+  const r = requestReschedule(ctx, band.id, e.id, { day: target });
+  assert.ok(r.ok, r.msg);
+  const t = s.threads.find((x) => x.id === r.threadId);
+  assert.equal(t.actions.length, 0, 'nothing for you to click; the leader decides');
+  assert.ok(!t.resolved);
+  advanceDay(ctx);
+  assert.ok(t.resolved, 'leader decided');
+  assert.ok(t.messages.at(-1).from === band.leaderId);
+});

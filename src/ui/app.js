@@ -1,17 +1,17 @@
 import { newGame, advanceDay, threadAction } from '../engine/sim.js';
-import { makeCtx, commit, player, playerBands, dayLabel, SAVE_VERSION } from '../engine/state.js';
+import { makeCtx, commit, player, playerBands, dayLabel, weekday, SAVE_VERSION } from '../engine/state.js';
 import { createRng } from '../engine/rng.js';
 import { cred, TIER_LABELS } from '../engine/people.js';
-import { generateBandName } from '../engine/band.js';
+import { generateBandName, membersOf } from '../engine/band.js';
 import { startBand, postRecruitment, removeMember } from '../engine/recruiting.js';
 import { buyGear, sellGear, fundBand, payout, woodshed, fireMember, leaveBand } from '../engine/economy.js';
-import { schedulePractice, cancelEvent } from '../engine/schedule.js';
+import { schedulePractice, cancelEvent, requestReschedule, eventsOn } from '../engine/schedule.js';
 import { bookGig } from '../engine/gigs.js';
 import { bookRecording, releaseRecording } from '../engine/studio.js';
 import { socialPost } from '../engine/social.js';
 import { applyToOpening } from '../engine/scene.js';
 import { STUDIO_TYPES, GEAR_BY_ID, GEAR_SLOTS } from '../engine/data.js';
-import { requiredSlots } from '../engine/people.js';
+import { requiredSlots, availabilityChance, shortName } from '../engine/people.js';
 import { SELL_BACK } from '../engine/economy.js';
 import { createView, dashboardView, inboxView, calendarView, shopView, sceneView } from './views.js';
 import { bandView } from './bandview.js';
@@ -89,7 +89,7 @@ function render() {
     const t = state.threads.find((x) => x.id === ui.threadId) || state.threads.slice().sort((a, b) => (a.resolved - b.resolved) || (b.day - a.day))[0];
     if (t && t.unread) { t.unread = false; save(); }
   }
-  const pending = state.threads.filter((t) => !t.resolved).length;
+  const pending = state.threads.filter((t) => !t.resolved && t.actions.length).length;
   const unread = state.threads.filter((t) => t.unread).length;
   status.innerHTML = `<span><b>${dayLabel(state.day, true)}</b> (day ${state.day + 1})</span><span>Cash <b>${money(state.cash)}</b></span><span>Cred <b>${cred(p)}</b> (${TIER_LABELS[p.tier]})</span><span>Bands <b>${playerBands(state).length}</b></span>`;
   adv.innerHTML = `<button class="btn" data-action="advance" data-days="1">Next day</button><button class="btn primary" data-action="advance" data-days="7">Next week ⏩</button>`;
@@ -195,6 +195,37 @@ const handlers = {
   'cal-band': (d) => { ui.calBand = d.band || null; render(); },
   'cal-day': (d) => { ui.calDay = Number(d.day); ui.eventId = null; render(); },
   cal: (d) => { ui.calOffset = Number(d.delta) === 0 ? 0 : ui.calOffset + Number(d.delta); render(); },
+  'resched-open': (d) => {
+    const { state } = ctx;
+    const band = state.bands[d.band];
+    const e = band?.events.find((x) => x.id === d.event);
+    if (!e) return;
+    const lead = band.leaderId === state.playerId;
+    const others = membersOf(state, band).filter((m) => !m.isPlayer);
+    const days = Array.from({ length: 14 }, (_, i) => state.day + 1 + i).filter((x) => x !== e.day);
+    const cells = days.map((x) => {
+      const taken = band.events.some((ev) => ev.day === x && ev.status === 'scheduled');
+      const free = others.filter((m) => availabilityChance(m, weekday(x)) > 0.5).length;
+      const clash = eventsOn(state, x).some((ev) => ev.bandId !== band.id);
+      const cls = free === others.length ? 'full' : free >= others.length * 0.66 ? 'part' : 'low';
+      return `<button data-action="resched-pick" data-band="${band.id}" data-event="${e.id}" data-day="${x}" ${taken ? 'disabled title="The band already has something that day"' : ''}>
+        <span class="avail ${cls}">${taken ? '■' : `${free}/${others.length}`}</span>${dayLabel(x).split(',')[0]} · day ${x + 1}${clash ? ' ⚠' : ''}</button>`;
+    }).join('');
+    modal(`<h3>${esc(e.title)} · ${dayLabel(e.day, true)}</h3>
+      <p class="small muted">Propose a new day and the band will weigh in in the inbox. ${lead ? 'Then you decide.' : `Then ${esc(shortName(state.people[band.leaderId]))} decides.`} Numbers show how many bandmates are usually free that evening. ⚠ = you have another band that day.</p>
+      <div class="daypick" style="margin:.6rem 0">${cells}</div>
+      <div class="actions">
+        <button class="btn" data-action="resched-pick" data-band="${band.id}" data-event="${e.id}" data-cancel="1">${lead ? 'Ask about skipping it instead' : 'Ask to skip it'}</button>
+        <button class="btn ghost" data-action="close-modal">Never mind</button>
+        ${lead ? `<span class="spacer"></span><button class="btn danger small" data-action="resched-force-cancel" data-band="${band.id}" data-event="${e.id}">Cancel now without asking</button>` : ''}
+      </div>`);
+  },
+  'resched-pick': (d) => {
+    closeModal();
+    const res = act(() => requestReschedule(ctx, d.band, d.event, d.cancel ? { cancel: true } : { day: Number(d.day) }));
+    if (res?.ok && res.threadId) { ui.tab = 'inbox'; ui.threadId = res.threadId; ui.inboxFilter = 'all'; render(); }
+  },
+  'resched-force-cancel': (d) => { closeModal(); act(() => cancelEvent(ctx, d.band, d.event)); },
   'confirm-yes': () => { const fn = pendingConfirm; closeModal(); fn?.(); },
   'cancel-event': (d) => confirmBox({ title: 'Cancel this event?', body: '<p class="small muted">Cancelling a show hurts your reputation with promoters.</p>', yes: 'Cancel it', danger: true, onYes: () => act(() => cancelEvent(ctx, d.band, d.event)) }),
   sell: (d) => {
