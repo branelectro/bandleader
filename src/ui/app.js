@@ -84,7 +84,7 @@ function render() {
   const p = player(state);
   const pending = state.threads.filter((t) => !t.resolved).length;
   const unread = state.threads.filter((t) => t.unread).length;
-  status.innerHTML = `<span><b>${dayLabel(state.day, true)}</b></span><span>Cash <b>${money(state.cash)}</b></span><span>Cred <b>${cred(p)}</b> (${TIER_LABELS[p.tier]})</span><span>Bands <b>${playerBands(state).length}</b></span>`;
+  status.innerHTML = `<span><b>${dayLabel(state.day, true)}</b> (day ${state.day + 1})</span><span>Cash <b>${money(state.cash)}</b></span><span>Cred <b>${cred(p)}</b> (${TIER_LABELS[p.tier]})</span><span>Bands <b>${playerBands(state).length}</b></span>`;
   adv.innerHTML = `<button class="btn" data-action="advance" data-days="1">Next day</button><button class="btn primary" data-action="advance" data-days="7">Next week ⏩</button>`;
   tabs.innerHTML = TABS.map(([k, l]) => `<button class="tab ${ui.tab === k ? 'active' : ''}" data-action="tab" data-tab="${k}">${l}${k === 'inbox' && (pending || unread) ? `<span class="badge">${pending || unread}</span>` : ''}</button>`).join('');
   const view = { dashboard: dashboardView, inbox: inboxView, calendar: calendarView, band: bandView, scene: sceneView, shop: shopView }[ui.tab] || dashboardView;
@@ -172,14 +172,15 @@ const handlers = {
     render();
     toast('Welcome! Start by buying the gear your role needs.');
   },
-  tab: (d) => { ui.tab = d.tab; ui.eventId = null; render(); window.scrollTo(0, 0); },
+  tab: (d) => { ui.tab = d.tab; ui.eventId = null; ui.calDay = null; render(); window.scrollTo(0, 0); },
   advance: (d) => advance(Number(d.days)),
   'open-band': (d) => { ui.tab = 'band'; ui.bandId = d.band; ui.bandSection = ui.bandSection || 'overview'; render(); },
   'band-section': (d) => { ui.bandSection = d.section; ui.eventId = null; render(); },
   'open-thread': (d) => { ui.threadId = d.thread; render(); },
   'inbox-filter': (d) => { ui.inboxFilter = d.filter; ui.threadId = null; render(); },
   'thread-act': (d) => act(() => threadAction(ctx, d.thread, d.act)),
-  'open-event': (d) => { ui.eventId = d.event; render(); },
+  'open-event': (d) => { ui.eventId = d.event; ui.calDay = null; render(); },
+  'cal-day': (d) => { ui.calDay = Number(d.day); ui.eventId = null; render(); },
   cal: (d) => { ui.calOffset = Number(d.delta) === 0 ? 0 : ui.calOffset + Number(d.delta); render(); },
   'cancel-event': (d) => { if (confirm('Cancel this event?')) act(() => cancelEvent(ctx, d.band, d.event)); },
   sell: (d) => { if (confirm('Sell this item?')) act(() => sellGear(ctx, Number(d.index))); },

@@ -2,7 +2,7 @@ import {
   ATTRS, ATTR_LABELS, INSTRUMENTS, INSTRUMENT_IDS, VOCAL_LABELS, GENRES, GENRE_IDS, GEAR_CATALOG, GEAR_SLOTS, GEAR_TIERS,
   GEAR_BY_ID, DAY_NAMES, AMATEUR_POINT_CAP, VENUE_TIERS,
 } from '../engine/data.js';
-import { cred, credBreakdown, displayName, roleLabel, TIER_LABELS, requiredSlots, shortName, SEMIPRO_AT, PRO_AT, attrTotal } from '../engine/people.js';
+import { cred, credBreakdown, displayName, roleLabel, TIER_LABELS, requiredSlots, shortName, SEMIPRO_AT, PRO_AT, attrTotal, availabilityChance } from '../engine/people.js';
 import { player, playerBands, dayLabel, weekday } from '../engine/state.js';
 import { membersOf, lineupCheck } from '../engine/band.js';
 import { standingLabel } from '../engine/gigs.js';
@@ -215,15 +215,47 @@ export function calendarView(state, ui) {
   const evs = {};
   for (const b of bands) for (const e of b.events) { (evs[e.day] = evs[e.day] || []).push({ b, e }); }
   const sel = ui.eventId && bands.flatMap((b) => b.events.map((e) => ({ b, e }))).find((x) => x.e.id === ui.eventId);
+  const selDay = ui.calDay ?? (sel ? sel.e.day : null);
   return `<div class="row between" style="margin-bottom:.6rem">
       <div class="row"><button class="btn small" data-action="cal" data-delta="-1">‹ Earlier</button><button class="btn small" data-action="cal" data-delta="0">Today</button><button class="btn small" data-action="cal" data-delta="1">Later ›</button></div>
       <div class="legend"><span><i style="background:var(--practice)"></i>Practice</span><span><i style="background:var(--gig)"></i>Show</span><span><i style="background:var(--recording)"></i>Recording</span></div>
     </div>
     <div class="cal">${DAY_NAMES.map((d) => `<div class="dow">${d}</div>`).join('')}
-    ${days.map((d) => `<div class="day ${d === state.day ? 'today' : ''} ${d < state.day ? 'past' : ''}"><div class="d">${d < 0 ? '' : `wk ${Math.floor(d / 7) + 1}`}</div>
+    ${days.map((d) => d < 0 ? '<div class="day past"></div>' : `<div class="day clickable ${d === state.day ? 'today' : ''} ${d < state.day ? 'past' : ''} ${d === selDay ? 'selected' : ''}" data-action="cal-day" data-day="${d}">
+      <div class="d">Day ${d + 1}${weekday(d) === 0 ? ` <span class="muted">· wk ${Math.floor(d / 7) + 1}</span>` : ''}${d === state.day ? ' <span class="warn">· today</span>' : ''}</div>
       ${(evs[d] || []).map(({ b, e }) => `<button class="ev ${e.type} ${e.status}" data-action="open-event" data-event="${e.id}" title="${esc(b.name)}: ${esc(e.title)}">${esc(b.name.split(' ')[0])}: ${esc(e.title)}</button>`).join('')}
     </div>`).join('')}</div>
-    ${sel ? `<div class="panel" style="margin-top:1rem">${eventDetail(state, sel.b, sel.e)}</div>` : '<p class="muted small" style="margin-top:.6rem">Click an event for details. Only a band\'s leader can change its schedule; schedule practices from the band page.</p>'}`;
+    ${selDay != null ? `<div class="panel" style="margin-top:1rem">${dayPanel(state, selDay, sel)}</div>` : '<p class="muted small" style="margin-top:.6rem">Click a day to see what\'s on it or schedule a practice. Click an event for details.</p>'}`;
+}
+
+// Everything about one day: its events, and (for bands you lead) scheduling.
+function dayPanel(state, day, sel) {
+  const bands = playerBands(state);
+  const items = bands.flatMap((b) => b.events.filter((e) => e.day === day).map((e) => ({ b, e })));
+  const parts = [`<h3>${dayLabel(day, true)} <span class="muted small">(day ${day + 1})</span></h3>`];
+  if (sel) parts.push(eventDetail(state, sel.b, sel.e));
+  else if (items.length) parts.push(`<div class="list">${items.map(({ b, e }) => `<div class="item ${e.type}"><div class="row between"><b>${esc(e.title)}</b><span class="tag">${esc(b.name)}</span></div>${e.result ? `<div class="small">${esc(e.result.summary)}</div>` : ''}<button class="btn small ghost" data-action="open-event" data-event="${e.id}">Details</button></div>`).join('')}</div>`);
+  else parts.push('<p class="muted small">Nothing on this day.</p>');
+
+  if (day > state.day) {
+    const led = bands.filter((b) => b.leaderId === state.playerId);
+    if (!led.length) parts.push('<p class="small muted">You don\'t lead any bands, so you can\'t schedule anything. Your band leaders handle their own calendars.</p>');
+    for (const b of led) {
+      const ms = membersOf(state, b);
+      const taken = b.events.some((e) => e.day === day && e.status === 'scheduled');
+      const free = ms.filter((m) => availabilityChance(m, weekday(day)) > 0.5);
+      const busy = ms.filter((m) => !free.includes(m));
+      const other = items.some(({ b: ob, e }) => ob.id !== b.id && e.status === 'scheduled');
+      parts.push(`<div class="item practice" style="margin-top:.5rem">
+        <div class="row between"><b>${esc(b.name)}</b>${ms.length < 2 ? '<span class="small muted">needs another member first</span>' : taken ? '<span class="small muted">already has something this day</span>' : `<button class="btn small primary" data-action="schedule" data-band="${b.id}" data-day="${day}">Schedule practice</button>`}</div>
+        ${ms.length >= 2 ? `<div class="small">Usually free: <b class="${busy.length ? 'warn' : 'good'}">${free.length}/${ms.length}</b>${busy.length ? ` · usually busy: ${busy.map(shortName).join(', ')}` : ''}</div>` : ''}
+        ${other ? '<div class="small warn">⚠ You already have another band that day.</div>' : ''}
+      </div>`);
+    }
+  } else if (day < state.day) {
+    parts.push('<p class="small muted">That day is in the past.</p>');
+  }
+  return parts.join('');
 }
 
 export function eventDetail(state, b, e) {

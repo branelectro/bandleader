@@ -149,6 +149,9 @@ hr { border: none; border-top: 1px solid var(--line); margin: .8rem 0; }
 .cal .dow { text-align: center; color: var(--muted); font-size: .75rem; text-transform: uppercase; padding-bottom: .2rem; }
 .cal .day { min-height: 92px; background: var(--panel-2); border-radius: 6px; padding: .3rem; font-size: .78rem; border: 1px solid transparent; }
 .cal .day.today { border-color: var(--accent-2); }
+.cal .day.clickable { cursor: pointer; }
+.cal .day.clickable:hover { border-color: var(--line); background: #2f2a36; }
+.cal .day.selected { border-color: var(--accent); }
 .cal .day.past { opacity: .55; }
 .cal .day .d { color: var(--muted); font-weight: 700; margin-bottom: .2rem; }
 .cal .ev { display: block; width: 100%; text-align: left; border: none; border-radius: 4px; padding: .15rem .3rem; margin-bottom: 2px; cursor: pointer; font-size: .74rem; line-height: 1.2; color: #111; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
