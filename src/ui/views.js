@@ -191,6 +191,8 @@ function threadDetail(state, t) {
     ${t.kind === 'audition' ? body + '<hr>' + msgs : msgs + body}
     ${t.actions.length ? `<div class="actions">${t.actions.map((a, i) => `<button class="btn ${i === 0 ? 'primary' : ''}" data-action="thread-act" data-thread="${t.id}" data-act="${a.id}">${esc(a.label)}</button>`).join('')}</div>` : ''}
     ${t.outcome ? `<p class="small muted" style="margin-top:.6rem">→ ${esc(t.outcome)}</p>` : ''}
+    ${!t.actions.length && !t.outcome ? '<p class="small muted" style="margin-top:.6rem">Just letting you know: no reply needed.</p>' : ''}
+    ${t.data?.npcLeader && !t.resolved ? `<p class="small muted">${esc(shortName(state.people[band.leaderId]))} runs this band and will decide once you answer (or tomorrow if you don't).</p>` : ''}
     ${t.expires && !t.resolved ? `<p class="small warn">Answer by ${dayLabel(t.expires)}.</p>` : ''}`;
 }
 

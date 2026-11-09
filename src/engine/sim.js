@@ -3,7 +3,7 @@ import { emptyState, makeCtx, commit, weekday, news, resolveThread, player, play
 import { createPlayer } from './people.js';
 import { seedScene, weeklySceneTick, processOpeningReplies, refreshOpenings, joinSceneBand } from './scene.js';
 import { dailyRecruiting, acceptCandidate, declineCandidate } from './recruiting.js';
-import { rollAttendance, resolvePractice, answerReschedule, weeklyMemberChecks, EVENT_PRIORITY } from './schedule.js';
+import { rollAttendance, resolvePractice, answerReschedule, answerNpcReschedule, npcDecideReschedule, weeklyMemberChecks, EVENT_PRIORITY } from './schedule.js';
 import { resolveGig, weeklyOffers } from './gigs.js';
 import { resolveSession, dailyReleases } from './studio.js';
 import { dailySocial } from './social.js';
@@ -104,6 +104,7 @@ function expireThreads(ctx) {
       const band = state.bands[t.bandId];
       const e = band?.events.find((x) => x.id === t.data.eventId);
       if (!e || e.status !== 'scheduled' || e.day <= state.day) resolveThread(t, 'Never answered; the original day stood.');
+      else if (t.data.npcLeader && state.day >= t.data.decideBy) npcDecideReschedule(ctx, t);
       continue;
     }
     if (t.expires == null || t.expires > state.day) continue;
@@ -136,7 +137,7 @@ export function threadAction(ctx, threadId, action) {
       res = action === 'accept' ? acceptCandidate(ctx, t) : declineCandidate(ctx, t);
       break;
     case 'reschedule':
-      res = answerReschedule(ctx, t, action);
+      res = t.data.npcLeader ? answerNpcReschedule(ctx, t, action) : answerReschedule(ctx, t, action);
       break;
     case 'payRequest':
       res = answerPayRequest(ctx, t, action);

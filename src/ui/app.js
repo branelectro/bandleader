@@ -84,6 +84,11 @@ function render() {
   }
   const { state } = ctx;
   const p = player(state);
+  if (ui.tab === 'inbox') {
+    // The thread you're looking at counts as read (before the badge is counted).
+    const t = state.threads.find((x) => x.id === ui.threadId) || state.threads.slice().sort((a, b) => (a.resolved - b.resolved) || (b.day - a.day))[0];
+    if (t && t.unread) { t.unread = false; save(); }
+  }
   const pending = state.threads.filter((t) => !t.resolved).length;
   const unread = state.threads.filter((t) => t.unread).length;
   status.innerHTML = `<span><b>${dayLabel(state.day, true)}</b> (day ${state.day + 1})</span><span>Cash <b>${money(state.cash)}</b></span><span>Cred <b>${cred(p)}</b> (${TIER_LABELS[p.tier]})</span><span>Bands <b>${playerBands(state).length}</b></span>`;
@@ -91,11 +96,6 @@ function render() {
   tabs.innerHTML = TABS.map(([k, l]) => `<button class="tab ${ui.tab === k ? 'active' : ''}" data-action="tab" data-tab="${k}">${l}${k === 'inbox' && (pending || unread) ? `<span class="badge">${pending || unread}</span>` : ''}</button>`).join('');
   const view = { dashboard: dashboardView, inbox: inboxView, calendar: calendarView, band: bandView, scene: sceneView, shop: shopView }[ui.tab] || dashboardView;
   main.innerHTML = view(state, ui);
-  if (ui.tab === 'inbox') {
-    // Opening the inbox marks the visible thread read.
-    const t = state.threads.find((x) => x.id === ui.threadId) || state.threads.slice().sort((a, b) => (a.resolved - b.resolved) || (b.day - a.day))[0];
-    if (t && t.unread) { t.unread = false; save(); }
-  }
 }
 
 let toastTimer = null;

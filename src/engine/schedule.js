@@ -104,7 +104,6 @@ export function rollAttendance(ctx, band, e) {
 function openRescheduleThread(ctx, band, e, asker, alsoOut) {
   const { state, rng } = ctx;
   const proposed = proposeDay(state, band, e, asker);
-  const lines = [];
   const t = createThread(state, {
     kind: 'reschedule',
     bandId: band.id,
@@ -132,21 +131,56 @@ function openRescheduleThread(ctx, band, e, asker, alsoOut) {
       { id: 'cancel', label: 'Cancel it' },
     ];
     t.resolved = false;
-    lines.push('');
+  } else if (proposed != null) {
+    // Someone else leads: you weigh in like everyone else, then the leader
+    // decides (the next day, or as soon as you answer).
+    const clash = playerConflicts(state, proposed).length > 0;
+    t.actions = [
+      { id: 'canDo', label: `${DAY_NAMES_LONG[weekday(proposed)]} works for me` },
+      { id: 'cantDo', label: `I can't do ${DAY_NAMES_LONG[weekday(proposed)]}` },
+    ];
+    t.resolved = false;
+    t.data.npcLeader = true;
+    t.data.decideBy = state.day + 1;
+    if (clash) addMessage(t, null, `(Heads up: you have another band booked on ${dayLabel(proposed)}.)`, state.day);
   } else {
-    // NPC leader decides: move if most people can, otherwise keep.
     const leader = state.people[band.leaderId];
-    const votes = membersOf(state, band).filter((m) => !m.isPlayer && m.id !== asker.id);
-    const yes = votes.filter((m) => t.data[`can_${m.id}`]).length;
-    const playerFree = proposed != null && !playerConflicts(state, proposed).length;
-    if (proposed != null && yes >= votes.length / 2 && playerFree && !band.events.some((x) => x.day === proposed && x.status === 'scheduled')) {
-      applyMove(ctx, band, e, t);
-      addMessage(t, leader.id, `OK, moving it to ${dayLabel(proposed)}.`, state.day);
-    } else {
-      addMessage(t, leader.id, `Sorry ${shortName(asker)}, we're keeping it. Catch up next time.`, state.day);
-    }
+    addMessage(t, leader.id, `There's no other day that works this week. We're keeping it, sorry ${shortName(asker)}.`, state.day);
     resolveThread(t);
   }
+}
+
+// An NPC leader settles a reschedule request, counting your vote.
+// playerCan: true/false if you answered, undefined if you stayed quiet.
+export function npcDecideReschedule(ctx, t, playerCan) {
+  const { state } = ctx;
+  const band = state.bands[t.bandId];
+  const e = band?.events.find((x) => x.id === t.data.eventId);
+  if (!band || !e || e.status !== 'scheduled') { resolveThread(t, 'Event no longer scheduled.'); return; }
+  const leader = state.people[band.leaderId];
+  const asker = state.people[t.data.askerId];
+  const proposed = t.data.proposed;
+  if (playerCan === undefined) playerCan = !playerConflicts(state, proposed).length;
+  const votes = membersOf(state, band).filter((m) => !m.isPlayer && m.id !== t.data.askerId);
+  const yes = votes.filter((m) => t.data[`can_${m.id}`]).length;
+  const free = proposed > state.day && !band.events.some((x) => x.id !== e.id && x.day === proposed && x.status === 'scheduled');
+  if (playerCan && free && yes >= votes.length / 2) {
+    applyMove(ctx, band, e, t);
+    addMessage(t, leader.id, `OK, moving it to ${dayLabel(proposed)}. See everyone then.`, state.day);
+    resolveThread(t, `Moved to ${dayLabel(proposed)}.`);
+  } else {
+    const why = !playerCan ? `${player(state).first} can't make it` : !free ? 'that day doesn\'t work anymore' : 'too many people can\'t do it';
+    addMessage(t, leader.id, `Sorry ${asker ? shortName(asker) : ''}, ${why}, so we're keeping ${dayLabel(e.day)}.`, state.day);
+    resolveThread(t, `Kept ${dayLabel(e.day)}.`);
+  }
+}
+
+export function answerNpcReschedule(ctx, t, action) {
+  const { state } = ctx;
+  const can = action === 'canDo';
+  addMessage(t, state.playerId, can ? 'That works for me.' : `I can't do ${DAY_NAMES_LONG[weekday(t.data.proposed)]}, sorry.`, state.day);
+  npcDecideReschedule(ctx, t, can);
+  return { ok: true, msg: can ? 'You said the new day works.' : 'You said you can\'t make the new day.' };
 }
 
 function proposeDay(state, band, e, asker) {

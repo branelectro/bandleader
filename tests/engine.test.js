@@ -106,3 +106,29 @@ test('joining another band and playing in it', () => {
   for (let i = 0; i < 90; i++) advanceDay(ctx);
   assert.ok(joined.events.some((e) => e.status === 'done'), 'NPC leader ran events');
 });
+
+test('you can vote on reschedules in a band someone else leads', () => {
+  const s = newGame('voter', { ...spec, attrs: { skill: 4, experience: 2, charisma: 2, reliability: 2 } });
+  const ctx = makeCtx(s);
+  const o = s.openings[0];
+  o.instrument = 'guitar'; o.minCred = 0;
+  applyToOpening(ctx, o.id);
+  for (let i = 0; i < 10; i++) {
+    advanceDay(ctx);
+    const t = s.threads.find((x) => x.kind === 'joinOffer' && !x.resolved);
+    if (t) { threadAction(ctx, t.id, 'accept'); break; }
+  }
+  let answered = 0;
+  for (let i = 0; i < 120; i++) {
+    advanceDay(ctx);
+    for (const t of s.threads.filter((x) => x.kind === 'reschedule' && !x.resolved)) {
+      assert.ok(t.data.npcLeader, 'reschedule in NPC band is open to the player');
+      assert.deepEqual(t.actions.map((a) => a.id), ['canDo', 'cantDo']);
+      const r = threadAction(ctx, t.id, answered % 2 ? 'cantDo' : 'canDo');
+      assert.ok(r.ok);
+      assert.ok(t.resolved, 'leader decides once you answer');
+      answered++;
+    }
+  }
+  assert.ok(answered > 0, 'at least one reschedule request came up');
+});
