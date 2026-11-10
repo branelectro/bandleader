@@ -1,7 +1,7 @@
 // Band model and band-level metrics.
-import { GENRES, BAND_NAME_PARTS, INSTRUMENTS } from './data.js?v=3';
-import { cred, gearScore, sings, hasPA, extraEffect, missingGear, shortName } from './people.js?v=3';
-import { clamp } from './rng.js?v=3';
+import { GENRES, BAND_NAME_PARTS, INSTRUMENTS } from './data.js?v=4';
+import { cred, gearScore, sings, hasPA, extraEffect, missingGear, shortName } from './people.js?v=4';
+import { clamp } from './rng.js?v=4';
 
 export function generateBandName(rng) {
   if (rng.chance(0.3)) return rng.pick(BAND_NAME_PARTS.single);

@@ -174,22 +174,22 @@ export const STUDIO_TYPES = {
   basement: {
     label: 'Basement demo',
     blurb: 'Free, record in your own space. Take as long as you like, but it will always sound like a basement.',
-    costPerSession: 0, productionRange: [15, 38], productionCap: 40, minSessions: 1, maxSessions: 8, oddHours: false,
+    costPerSession: 0, productionRange: [15, 38], productionCap: 40, minSessions: 1, oddHours: false,
   },
   student: {
     label: 'Recording-school class project',
     blurb: 'A student engineer records you free for their grade. Overnight slots only, and quality depends on the student.',
-    costPerSession: 0, productionRange: [40, 72], productionCap: 75, minSessions: 3, maxSessions: 5, oddHours: true,
+    costPerSession: 0, productionRange: [40, 72], productionCap: 75, minSessions: 3, oddHours: true,
   },
   cheap: {
     label: 'Budget studio',
     blurb: 'Real room, clock always running. Rush it and the mix suffers.',
-    costPerSession: 180, productionRange: [52, 76], productionCap: 82, minSessions: 1, maxSessions: 4, oddHours: false,
+    costPerSession: 180, productionRange: [52, 76], productionCap: 82, minSessions: 1, oddHours: false,
   },
   pro: {
     label: 'Pro studio',
     blurb: 'Great engineer, great room, great invoice.',
-    costPerSession: 650, productionRange: [72, 95], productionCap: 98, minSessions: 1, maxSessions: 5, oddHours: false,
+    costPerSession: 650, productionRange: [72, 95], productionCap: 98, minSessions: 1, oddHours: false,
   },
 };
 

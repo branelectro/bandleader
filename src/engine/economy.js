@@ -1,9 +1,9 @@
 // Money, gear, pay requests and personal actions.
-import { GEAR_BY_ID } from './data.js?v=3';
-import { tierFor, marketRate, shortName, displayName, TIER_LABELS, grantXp, cred } from './people.js?v=3';
-import { membersOf } from './band.js?v=3';
-import { player, createThread, resolveThread, news, addMessage, playerBands } from './state.js?v=3';
-import { removeMember } from './recruiting.js?v=3';
+import { GEAR_BY_ID } from './data.js?v=4';
+import { tierFor, marketRate, shortName, displayName, TIER_LABELS, grantXp, cred } from './people.js?v=4';
+import { membersOf } from './band.js?v=4';
+import { player, createThread, resolveThread, news, addMessage, playerBands } from './state.js?v=4';
+import { removeMember } from './recruiting.js?v=4';
 
 export const WEEKLY_JOB_PAY = 70;
 export const SELL_BACK = 0.5;

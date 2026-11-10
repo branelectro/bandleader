@@ -1,17 +1,18 @@
-import { GENRES, INSTRUMENTS, INSTRUMENT_IDS, VOCAL_LABELS, VENUE_TIERS, STUDIO_TYPES, POST_TYPES, DAY_NAMES } from '../engine/data.js?v=3';
-import { shortName, availabilityChance, cred } from '../engine/people.js?v=3';
-import { player, playerBands, dayLabel, weekday } from '../engine/state.js?v=3';
+import { GENRES, INSTRUMENTS, INSTRUMENT_IDS, VOCAL_LABELS, VENUE_TIERS, STUDIO_TYPES, POST_TYPES, DAY_NAMES } from '../engine/data.js?v=4';
+import { shortName, availabilityChance, cred } from '../engine/people.js?v=4';
+import { player, playerBands, dayLabel, weekday } from '../engine/state.js?v=4';
 import {
   membersOf, lineupCheck, bandCred, practiceRoomCost, payroll, bestRecording, coordinationDrag, bandHasPA,
-} from '../engine/band.js?v=3';
-import { bookingCheck, standingLabel, standingProgress } from '../engine/gigs.js?v=3';
-import { recordingCost } from '../engine/studio.js?v=3';
-import { payGate } from '../engine/recruiting.js?v=3';
-import { postsToday } from '../engine/social.js?v=3';
-import { eventsOn } from '../engine/schedule.js?v=3';
-import { MERCH_ITEMS, DISC_FORMATS, merchSpec, ensureMerch } from '../engine/merch.js?v=3';
-import { esc, money, bar, stat, memberCard, bandDot, fundBox, unitPrice } from './util.js?v=3';
-import { eventDetail, genreRuleText, eventButtons } from './views.js?v=3';
+} from '../engine/band.js?v=4';
+import { bookingCheck, standingLabel, standingProgress } from '../engine/gigs.js?v=4';
+import { recordingCost } from '../engine/studio.js?v=4';
+import { payGate } from '../engine/recruiting.js?v=4';
+import { postsToday } from '../engine/social.js?v=4';
+import { eventsOn } from '../engine/schedule.js?v=4';
+import { MERCH_ITEMS, DISC_FORMATS, merchSpec, ensureMerch } from '../engine/merch.js?v=4';
+import { raiseOutlook } from '../engine/npc.js?v=4';
+import { esc, money, bar, stat, memberCard, bandDot, fundBox, unitPrice } from './util.js?v=4';
+import { eventDetail, genreRuleText, eventButtons } from './views.js?v=4';
 
 const SECTIONS = [
   ['overview', 'Overview'], ['members', 'Members'], ['schedule', 'Practice'], ['shows', 'Shows'],
@@ -37,6 +38,16 @@ export function bandView(state, ui) {
     ${content(state, ui, band, lead)}`;
 }
 
+function yourPayBox(state, band) {
+  const o = raiseOutlook(state, band);
+  const waiting = o.nextAskDay != null && state.day < o.nextAskDay;
+  return `<div class="item fund-box">
+    <div class="row between"><div><b>Your pay:</b> ${o.current ? `${money(o.current)} per practice/gig` : 'unpaid (you get a share when the leader splits the fund)'}</div>
+    <button class="btn small primary" data-action="raise-open" data-band="${band.id}" ${waiting ? 'disabled' : ''}>Ask for a raise…</button></div>
+    ${waiting ? `<div class="small muted">You asked recently. You can ask again ${dayLabel(o.nextAskDay)}.</div>` : ''}
+  </div>`;
+}
+
 function notLeader(state, band) {
   return `<p class="muted small">${esc(shortName(state.people[band.leaderId]))} leads ${esc(band.name)} and runs the schedule, bookings and socials. You just have to show up (and keep your calendar clear).</p>`;
 }
@@ -60,6 +71,7 @@ function overview(state, ui, band, lead) {
         ${stat('Morale', Math.round(band.morale), bar(band.morale, 100, 'good'))}
         ${stat('Best recording', best ? best.quality : '—', best ? esc(STUDIO_TYPES[best.type].label) : 'none yet')}
       </div>
+      ${!lead ? yourPayBox(state, band) : ''}
       ${lead && payroll(state, band) > 0 && band.cash < payroll(state, band) * 2 ? fundBox(state, band, payroll(state, band) * 4, 'paying your members for the next 4 practices/gigs') : ''}
       ${lc.ok ? '<p class="good small">Lineup is complete. You can book shows and record.</p>' : `<div class="item bad"><b>Lineup not ready</b><ul class="small">${lc.problems.map((p) => `<li>${esc(p)}</li>`).join('')}</ul><p class="small muted">${genreRuleText(band.genre)}</p>${lead ? '<button class="btn small" data-action="band-section" data-section="recruit">Recruit</button>' : ''}</div>`}
       ${prog ? `<div><h4>Next standing: ${esc(prog.next)}</h4>
@@ -165,7 +177,7 @@ function shows(state, ui, band, lead) {
 function studio(state, ui, band, lead) {
   const st = ui.studio;
   const s = STUDIO_TYPES[st.type];
-  st.sessions = Math.max(s.minSessions, Math.min(s.maxSessions, st.sessions));
+  st.sessions = Math.max(s.minSessions, st.sessions);
   st.songs = Math.max(1, Math.min(Math.max(1, band.songs), st.songs));
   const cost = recordingCost(state, band, st.type, st.sessions);
   const inProgress = band.recordings.find((r) => !r.done);
@@ -179,7 +191,7 @@ function studio(state, ui, band, lead) {
         <div class="small muted">${esc(t.blurb)}</div></label>`).join('')}</div>
       <div class="row">
         <label class="field">Songs<input type="number" id="st-songs" data-change="studio-num" min="1" max="${band.songs}" value="${st.songs}" style="width:6rem"></label>
-        <label class="field">Sessions<input type="number" id="st-sessions" data-change="studio-num" min="${s.minSessions}" max="${s.maxSessions}" value="${st.sessions}" style="width:6rem"></label>
+        <label class="field">Sessions<input type="number" id="st-sessions" data-change="studio-num" min="${s.minSessions}" value="${st.sessions}" style="width:6rem"></label>
         <div><div class="small muted">Cost</div><b>${money(cost)}</b> <span class="small muted">(fund ${money(band.cash)})</span></div>
       </div>
       <p class="small ${perSong < 1 && st.type !== 'basement' ? 'warn' : 'muted'}">${perSong.toFixed(1)} sessions per song. ${perSong < 1 && (st.type === 'cheap' || st.type === 'pro') ? 'That\'s rushed: expect a sloppier mix and shakier takes.' : st.type === 'basement' ? 'Take as long as you want; it will still sound like a basement (production caps at 40).' : st.type === 'student' ? 'Sessions are overnight (unless someone has an audio-student roommate). Expect people to bail on 2am sessions.' : 'Plenty of time.'}</p>

@@ -1,17 +1,17 @@
 // The game loop: new game, daily tick, and inbox action dispatch.
-import { emptyState, makeCtx, commit, weekday, news, resolveThread, player, playerBands, createThread } from './state.js?v=3';
-import { createPlayer, DEFAULT_PLAYER_BUSY } from './people.js?v=3';
-import { seedScene, weeklySceneTick, processOpeningReplies, refreshOpenings, joinSceneBand } from './scene.js?v=3';
-import { dailyRecruiting, acceptCandidate, declineCandidate } from './recruiting.js?v=3';
-import { rollAttendance, resolvePractice, answerReschedule, answerNpcReschedule, npcDecideReschedule, weeklyMemberChecks, EVENT_PRIORITY } from './schedule.js?v=3';
-import { resolveGig, weeklyOffers } from './gigs.js?v=3';
-import { resolveSession, dailyReleases, finishRecording } from './studio.js?v=3';
-import { dailySocial } from './social.js?v=3';
-import { checkTierChanges, answerPayRequest, answerFireRequest, weeklyIncome, SHIFT_PAY } from './economy.js?v=3';
-import { npcWeekly, npcDaily, planPractices, answerGigProposal, expireGigProposal } from './npc.js?v=3';
-import { removeMember } from './recruiting.js?v=3';
-import { dailyMerch, ensureMerch } from './merch.js?v=3';
-import { shortName } from './people.js?v=3';
+import { emptyState, makeCtx, commit, weekday, news, resolveThread, player, playerBands, createThread } from './state.js?v=4';
+import { createPlayer, DEFAULT_PLAYER_BUSY } from './people.js?v=4';
+import { seedScene, weeklySceneTick, processOpeningReplies, refreshOpenings, joinSceneBand } from './scene.js?v=4';
+import { dailyRecruiting, acceptCandidate, declineCandidate } from './recruiting.js?v=4';
+import { rollAttendance, resolvePractice, answerReschedule, answerNpcReschedule, npcDecideReschedule, weeklyMemberChecks, EVENT_PRIORITY } from './schedule.js?v=4';
+import { resolveGig, weeklyOffers } from './gigs.js?v=4';
+import { resolveSession, dailyReleases, finishRecording } from './studio.js?v=4';
+import { dailySocial } from './social.js?v=4';
+import { checkTierChanges, answerPayRequest, answerFireRequest, weeklyIncome, SHIFT_PAY } from './economy.js?v=4';
+import { npcWeekly, npcDaily, planPractices, answerGigProposal, expireGigProposal, answerPracticeProposal, expirePracticeProposal, answerRaiseAsk } from './npc.js?v=4';
+import { removeMember } from './recruiting.js?v=4';
+import { dailyMerch, ensureMerch } from './merch.js?v=4';
+import { shortName } from './people.js?v=4';
 
 export const STARTING_CASH = 350;
 
@@ -133,6 +133,8 @@ function expireThreads(ctx) {
         news(state, `${shortName(m)} quit ${band.name} after you ignored their pay request.`, { bandId: band.id, tone: 'bad' });
       }
       resolveThread(t, 'You never answered. They quit.');
+    } else if (t.kind === 'practiceProposal') {
+      expirePracticeProposal(ctx, t);
     } else if (t.kind === 'gigProposal') {
       expireGigProposal(ctx, t);
     } else {
@@ -189,6 +191,12 @@ export function threadAction(ctx, threadId, action) {
       break;
     case 'fire':
       res = answerFireRequest(ctx, t, action);
+      break;
+    case 'raiseAsk':
+      res = answerRaiseAsk(ctx, t, action);
+      break;
+    case 'practiceProposal':
+      res = answerPracticeProposal(ctx, t, action);
       break;
     case 'gigProposal':
       res = answerGigProposal(ctx, t, action);

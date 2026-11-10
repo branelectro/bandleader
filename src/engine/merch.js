@@ -1,8 +1,8 @@
 // Merch: the band orders stock up front (bigger batches = cheaper per unit),
 // sells it at shows and a little online. Physical releases (CDs, vinyl) are
 // merch tied to a recording.
-import { news, createThread, dayLabel, uid } from './state.js?v=3';
-import { clamp } from './rng.js?v=3';
+import { news, createThread, dayLabel, uid } from './state.js?v=4';
+import { clamp } from './rng.js?v=4';
 
 // batches: [quantity, cost per unit]. Bigger runs are cheaper per unit,
 // like real print and pressing quotes.

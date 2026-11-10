@@ -2,8 +2,8 @@
 import {
   ATTRS, INSTRUMENTS, INSTRUMENT_IDS, GEAR_CATALOG, GEAR_BY_ID, FIRST_NAMES, LAST_NAMES, NICKNAMES,
   DAY_JOBS, EXTRAS, EXTRAS_BY_ID, AMATEUR_POINT_CAP,
-} from './data.js?v=3';
-import { clamp } from './rng.js?v=3';
+} from './data.js?v=4';
+import { clamp } from './rng.js?v=4';
 
 export const TIERS = ['amateur', 'semipro', 'pro'];
 export const TIER_LABELS = { amateur: 'Amateur', semipro: 'Semi-pro', pro: 'Professional' };

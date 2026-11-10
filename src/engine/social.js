@@ -1,8 +1,8 @@
 // Band social accounts: posting keeps engagement up; silence lets it rot.
-import { POST_TYPES } from './data.js?v=3';
-import { membersOf, bandEffect } from './band.js?v=3';
-import { news } from './state.js?v=3';
-import { clamp } from './rng.js?v=3';
+import { POST_TYPES } from './data.js?v=4';
+import { membersOf, bandEffect } from './band.js?v=4';
+import { news } from './state.js?v=4';
+import { clamp } from './rng.js?v=4';
 
 export function postsToday(band, day) {
   return band.postsByDay[day] || 0;

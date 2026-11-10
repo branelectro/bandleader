@@ -1,12 +1,12 @@
 // Calendar events, attendance, rescheduling threads, and practices.
-import { EXCUSES, DAY_NAMES_LONG, GENRES } from './data.js?v=3';
+import { EXCUSES, DAY_NAMES_LONG, GENRES } from './data.js?v=4';
 import {
   availabilityChance, adjustReliability, grantXp, shortName, displayName, extraEffect,
-} from './people.js?v=3';
-import { membersOf, coordinationDrag, bandEffect, practiceRoomCost, payroll } from './band.js?v=3';
-import { uid, weekday, dayLabel, createThread, addMessage, resolveThread, news, player } from './state.js?v=3';
-import { clamp } from './rng.js?v=3';
-import { removeMember } from './recruiting.js?v=3';
+} from './people.js?v=4';
+import { membersOf, coordinationDrag, bandEffect, practiceRoomCost, payroll } from './band.js?v=4';
+import { uid, weekday, dayLabel, createThread, addMessage, resolveThread, news, player } from './state.js?v=4';
+import { clamp } from './rng.js?v=4';
+import { removeMember } from './recruiting.js?v=4';
 
 export const EVENT_PRIORITY = { gig: 3, recording: 2, practice: 1 };
 
@@ -418,8 +418,15 @@ export function payWages(ctx, band, present) {
     }
   }
   // Player's own pay in NPC bands that pay hired members.
+  // Your pay in a band someone else leads comes out of their fund.
   if (band.playerPay && present.some((m) => m.isPlayer)) {
-    state.cash += band.playerPay;
+    if (band.cash >= band.playerPay) {
+      band.cash -= band.playerPay;
+      state.cash += band.playerPay;
+      paid += band.playerPay;
+    } else {
+      news(state, `${band.name} couldn't cover your $${band.playerPay} today. The fund is dry.`, { bandId: band.id, tone: 'bad' });
+    }
   }
   return paid;
 }

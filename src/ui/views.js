@@ -1,13 +1,13 @@
 import {
   ATTRS, ATTR_LABELS, INSTRUMENTS, INSTRUMENT_IDS, VOCAL_LABELS, GENRES, GENRE_IDS, GEAR_CATALOG, GEAR_SLOTS, GEAR_TIERS,
   GEAR_BY_ID, DAY_NAMES, AMATEUR_POINT_CAP, VENUE_TIERS,
-} from '../engine/data.js?v=3';
-import { cred, credBreakdown, displayName, roleLabel, TIER_LABELS, requiredSlots, shortName, SEMIPRO_AT, PRO_AT, attrTotal, availabilityChance } from '../engine/people.js?v=3';
-import { player, playerBands, dayLabel, weekday } from '../engine/state.js?v=3';
-import { membersOf, lineupCheck, payroll } from '../engine/band.js?v=3';
-import { standingLabel } from '../engine/gigs.js?v=3';
-import { SELL_BACK, expectedJobPay, SHIFT_PAY } from '../engine/economy.js?v=3';
-import { esc, money, bar, stat, credBadge, attrRows, gearList, extrasList, daysStrip, memberCard, gearSlotSummary, bandColor, bandDot, EVENT_ICONS, EVENT_NAMES, fundBox, dayToggles } from './util.js?v=3';
+} from '../engine/data.js?v=4';
+import { cred, credBreakdown, displayName, roleLabel, TIER_LABELS, requiredSlots, shortName, SEMIPRO_AT, PRO_AT, attrTotal, availabilityChance } from '../engine/people.js?v=4';
+import { player, playerBands, dayLabel, weekday } from '../engine/state.js?v=4';
+import { membersOf, lineupCheck, payroll } from '../engine/band.js?v=4';
+import { standingLabel } from '../engine/gigs.js?v=4';
+import { SELL_BACK, expectedJobPay, SHIFT_PAY } from '../engine/economy.js?v=4';
+import { esc, money, bar, stat, credBadge, attrRows, gearList, extrasList, daysStrip, memberCard, gearSlotSummary, bandColor, bandDot, EVENT_ICONS, EVENT_NAMES, fundBox, dayToggles } from './util.js?v=4';
 
 // ---------------------------------------------------------------------------
 // Character creation
@@ -162,7 +162,7 @@ function bandSummaryCard(state, b) {
 // ---------------------------------------------------------------------------
 // Inbox
 // ---------------------------------------------------------------------------
-const KIND_LABEL = { audition: 'Audition', reschedule: 'Schedule', payRequest: 'Pay request', fire: 'Band drama', joinOffer: 'Offer', gigProposal: 'Show offer', result: 'Result', dm: 'DM', bandChat: 'Band chat', note: 'Note' };
+const KIND_LABEL = { audition: 'Audition', reschedule: 'Schedule', payRequest: 'Pay request', fire: 'Band drama', joinOffer: 'Offer', gigProposal: 'Show offer', practiceProposal: 'Practice plan', raiseAsk: 'Pay talk', result: 'Result', dm: 'DM', bandChat: 'Band chat', note: 'Note' };
 
 export function inboxView(state, ui) {
   const threads = state.threads.slice().sort((a, b) => (a.resolved - b.resolved) || (b.day - a.day));

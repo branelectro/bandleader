@@ -1,6 +1,6 @@
-import { ATTRS, ATTR_LABELS, GEAR_BY_ID, GEAR_TIERS, GEAR_SLOTS, EXTRAS_BY_ID, DAY_NAMES } from '../engine/data.js?v=3';
-import { cred, displayName, roleLabel, TIER_LABELS, xpToNext, missingGear, requiredSlots, bestInSlot } from '../engine/people.js?v=3';
-import { fmtMoney } from '../engine/state.js?v=3';
+import { ATTRS, ATTR_LABELS, GEAR_BY_ID, GEAR_TIERS, GEAR_SLOTS, EXTRAS_BY_ID, DAY_NAMES } from '../engine/data.js?v=4';
+import { cred, displayName, roleLabel, TIER_LABELS, xpToNext, missingGear, requiredSlots, bestInSlot } from '../engine/people.js?v=4';
+import { fmtMoney } from '../engine/state.js?v=4';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const money = fmtMoney;

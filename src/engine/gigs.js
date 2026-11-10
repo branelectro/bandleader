@@ -1,12 +1,12 @@
 // Venues, show offers, booking rules and gig results.
-import { VENUE_TIERS, VENUE_NAMES, GENRES, CROWD_REACTIONS } from './data.js?v=3';
-import { membersOf, performanceScore, lineupCheck, bandHasPA, bestRecording, bandEffect } from './band.js?v=3';
-import { grantXp, shortName } from './people.js?v=3';
-import { createEvent, resolveAttendance, payWages, playerConflicts } from './schedule.js?v=3';
-import { uid, weekday, dayLabel, news, createThread } from './state.js?v=3';
-import { billFor } from './scene.js?v=3';
-import { clamp } from './rng.js?v=3';
-import { sellAtGig } from './merch.js?v=3';
+import { VENUE_TIERS, VENUE_NAMES, GENRES, CROWD_REACTIONS } from './data.js?v=4';
+import { membersOf, performanceScore, lineupCheck, bandHasPA, bestRecording, bandEffect } from './band.js?v=4';
+import { grantXp, shortName } from './people.js?v=4';
+import { createEvent, resolveAttendance, payWages, playerConflicts } from './schedule.js?v=4';
+import { uid, weekday, dayLabel, news, createThread } from './state.js?v=4';
+import { billFor } from './scene.js?v=4';
+import { clamp } from './rng.js?v=4';
+import { sellAtGig } from './merch.js?v=4';
 
 // Band size changes *why* booking is hard, not whether the band is "better".
 export function sizeModifier(n) {

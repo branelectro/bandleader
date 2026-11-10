@@ -1,22 +1,23 @@
-import { newGame, advanceDay, threadAction, repairSave } from '../engine/sim.js?v=3';
-import { makeCtx, commit, player, playerBands, dayLabel, weekday, SAVE_VERSION } from '../engine/state.js?v=3';
-import { createRng } from '../engine/rng.js?v=3';
-import { cred, TIER_LABELS } from '../engine/people.js?v=3';
-import { generateBandName, membersOf } from '../engine/band.js?v=3';
-import { startBand, postRecruitment, removeMember } from '../engine/recruiting.js?v=3';
-import { buyGear, sellGear, fundBand, payout, woodshed, fireMember, leaveBand, setMemberPay, giveBonus, updateProfile, expectedJobPay, SHIFT_PAY } from '../engine/economy.js?v=3';
-import { schedulePractice, cancelEvent, requestReschedule, eventsOn, giveNotice, withdrawNotice } from '../engine/schedule.js?v=3';
-import { bookGig } from '../engine/gigs.js?v=3';
-import { bookRecording, releaseRecording } from '../engine/studio.js?v=3';
-import { socialPost } from '../engine/social.js?v=3';
-import { applyToOpening } from '../engine/scene.js?v=3';
-import { STUDIO_TYPES, GEAR_BY_ID, GEAR_SLOTS } from '../engine/data.js?v=3';
-import { requiredSlots, availabilityChance, shortName, marketRate, TIER_LABELS as TIERS, DEFAULT_PLAYER_BUSY } from '../engine/people.js?v=3';
-import { SELL_BACK } from '../engine/economy.js?v=3';
-import { createView, dashboardView, inboxView, calendarView, shopView, sceneView } from './views.js?v=3';
-import { bandView } from './bandview.js?v=3';
-import { esc, money, fundBox, dayToggles, unitPrice } from './util.js?v=3';
-import { orderMerch, merchSpec, DISC_FORMATS, ensureMerch } from '../engine/merch.js?v=3';
+import { newGame, advanceDay, threadAction, repairSave } from '../engine/sim.js?v=4';
+import { makeCtx, commit, player, playerBands, dayLabel, weekday, SAVE_VERSION } from '../engine/state.js?v=4';
+import { createRng } from '../engine/rng.js?v=4';
+import { cred, TIER_LABELS } from '../engine/people.js?v=4';
+import { generateBandName, membersOf } from '../engine/band.js?v=4';
+import { startBand, postRecruitment, removeMember } from '../engine/recruiting.js?v=4';
+import { buyGear, sellGear, fundBand, payout, woodshed, fireMember, leaveBand, setMemberPay, giveBonus, updateProfile, expectedJobPay, SHIFT_PAY } from '../engine/economy.js?v=4';
+import { schedulePractice, cancelEvent, requestReschedule, eventsOn, giveNotice, withdrawNotice } from '../engine/schedule.js?v=4';
+import { bookGig } from '../engine/gigs.js?v=4';
+import { bookRecording, releaseRecording } from '../engine/studio.js?v=4';
+import { socialPost } from '../engine/social.js?v=4';
+import { applyToOpening } from '../engine/scene.js?v=4';
+import { STUDIO_TYPES, GEAR_BY_ID, GEAR_SLOTS } from '../engine/data.js?v=4';
+import { requiredSlots, availabilityChance, shortName, marketRate, TIER_LABELS as TIERS, DEFAULT_PLAYER_BUSY } from '../engine/people.js?v=4';
+import { SELL_BACK } from '../engine/economy.js?v=4';
+import { createView, dashboardView, inboxView, calendarView, shopView, sceneView } from './views.js?v=4';
+import { bandView } from './bandview.js?v=4';
+import { esc, money, fundBox, dayToggles, unitPrice } from './util.js?v=4';
+import { orderMerch, merchSpec, DISC_FORMATS, ensureMerch } from '../engine/merch.js?v=4';
+import { raiseOutlook, askForRaise, RAISE_COOLDOWN } from '../engine/npc.js?v=4';
 
 const SAVE_KEY = 'bandleader-save-v1';
 const UI_KEY = 'bandleader-ui-v1';
@@ -327,6 +328,31 @@ const handlers = {
     });
   },
   'pay-open': (d) => payModal(d.band, d.person),
+  'raise-open': (d) => {
+    const { state } = ctx;
+    const band = state.bands[d.band];
+    const o = raiseOutlook(state, band);
+    const p = player(state);
+    const suggest = Math.max(o.current + 10, o.market || 0, 15);
+    const hint = (good, text) => `<li class="${good ? 'good' : 'warn'}">${text}</li>`;
+    const leaderName = esc(shortName(state.people[band.leaderId]));
+    modal(`<h3>Ask ${leaderName} for a raise</h3>
+      <p>You get <b>${o.current ? `${money(o.current)} per practice/gig` : 'nothing per event right now'}</b>. The going rate for ${p.tier === "amateur" ? "an amateur" : `a ${esc(TIERS[p.tier].toLowerCase())}`} like you is <b>${o.market ? money(o.market) : 'nothing yet (amateurs rarely get paid)'}</b>.</p>
+      <ul class="small">
+        ${hint(o.worth >= 1, o.worth >= 1.15 ? 'Your cred is well above the rest of the band.' : o.worth >= 1 ? 'Your cred is on par with the band.' : 'Your cred is below the rest of the band.')}
+        ${hint(p.attrs.reliability >= 6 && !(p.missedRecent >= 2), (p.missedRecent || 0) >= 2 ? 'You\'ve missed things lately. They\'ve noticed.' : `Reliability ${p.attrs.reliability}/10.`)}
+        ${hint(band.cash >= suggest * 6 || band.standing >= 2, band.cash >= suggest * 6 || band.standing >= 2 ? 'The band can afford to pay people.' : 'The band fund looks thin.')}
+      </ul>
+      <p class="small muted">Asking for way more than the going rate usually gets a no. You can only ask once every ${RAISE_COOLDOWN} days.</p>
+      <div class="row"><span>$</span><input type="number" id="raise-amt" min="${o.current + 5}" step="5" value="${suggest}" style="width:7rem"><span class="small muted">per practice/gig</span></div>
+      <div class="actions"><button class="btn primary" data-action="raise-send" data-band="${band.id}">Ask</button><button class="btn ghost" data-action="close-modal">Never mind</button></div>`);
+  },
+  'raise-send': (d) => {
+    const amt = Number(val('raise-amt'));
+    closeModal();
+    const res = act(() => askForRaise(ctx, d.band, amt));
+    if (res?.ok) { const t = ctx.state.threads.find((x) => x.kind === 'raiseAsk' && x.bandId === d.band); if (t) { ui.tab = 'inbox'; ui.threadId = t.id; ui.inboxFilter = 'all'; render(); } }
+  },
   'pay-set': (d) => { closeModal(); act(() => setMemberPay(ctx, d.band, d.person, d.amount ?? val('pay-amt'))); },
   bonus: (d) => {
     const band = ctx.state.bands[d.band];
@@ -484,10 +510,10 @@ const changeHandlers = {
   'studio-type': (el) => {
     ui.studio.type = el.value;
     const s = STUDIO_TYPES[el.value];
-    ui.studio.sessions = Math.max(s.minSessions, Math.min(s.maxSessions, ui.studio.sessions));
+    ui.studio.sessions = Math.max(s.minSessions, ui.studio.sessions);
     render();
   },
-  'studio-num': () => { ui.studio.songs = Number(val('st-songs')) || 1; ui.studio.sessions = Number(val('st-sessions')) || 1; render(); },
+  'studio-num': () => { ui.studio.songs = Math.max(1, Math.floor(Number(val('st-songs')) || 1)); ui.studio.sessions = Math.max(1, Math.floor(Number(val('st-sessions')) || 1)); render(); },
   'recruit-role': (el) => { const r = ui.recruit.roles[Number(el.dataset.index)]; r[el.dataset.field] = el.value; if (r.instrument === 'vocals') r.vocals = 'lead'; render(); },
   'recruit-pay': (el) => { ui.recruit.payLevel = el.value; },
 };

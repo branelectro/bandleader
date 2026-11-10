@@ -380,3 +380,73 @@ test('a quality-50 studio recording books clubs that want 50+', async () => {
   band.recordings = [{ id: 'r2', type: 'basement', done: true, quality: 60, production: 38, performance: 75 }];
   assert.ok(!bookingCheck(band, 2).ok, 'basement demos still do not count');
 });
+
+function joinABand(seed) {
+  const s = newGame(seed, { ...spec, attrs: { skill: 4, experience: 2, charisma: 2, reliability: 2 } });
+  const ctx = makeCtx(s);
+  for (const o of s.openings) { o.instrument = 'guitar'; o.minCred = 0; }
+  applyToOpening(ctx, s.openings[0].id);
+  for (let i = 0; i < 10; i++) {
+    advanceDay(ctx);
+    const t = s.threads.find((x) => x.kind === 'joinOffer' && !x.resolved);
+    if (t) { threadAction(ctx, t.id, 'accept'); return { s, ctx, band: Object.values(s.bands)[0] }; }
+  }
+  throw new Error('never got in');
+}
+
+test('bands you joined propose practices; you approve, decline (with a counter-day) or stay silent', () => {
+  const { s, ctx, band } = joinABand('practice-proposals');
+  const practices = () => band.events.filter((e) => e.type === 'practice').map((e) => e.day);
+  const t = s.threads.find((x) => x.kind === 'practiceProposal' && !x.resolved);
+  assert.ok(t, 'a practice plan was proposed on joining');
+  assert.equal(practices().length, 0, 'nothing booked before you answer');
+  const first = t.data.days[0].day;
+  threadAction(ctx, t.id, `no:${first}`);
+  assert.ok(t.data.days.some((x) => x.day !== first && x.status === 'pending' && !t.data.days.slice(0, 2).some((y) => y.day === x.day)) || t.messages.at(-1).text.includes('skip'), 'leader offers another day or skips');
+  assert.ok(!practices().includes(first), 'declined day is not booked');
+  threadAction(ctx, t.id, 'all');
+  assert.ok(t.resolved);
+  assert.ok(practices().length >= 1 && !practices().includes(first), 'approved days booked');
+  // A later plan that you ignore goes ahead at the deadline.
+  let later;
+  for (let i = 0; i < 14 && !later; i++) { advanceDay(ctx); later = s.threads.find((x) => x.kind === 'practiceProposal' && !x.resolved); }
+  assert.ok(later, 'weekly plans keep coming');
+  while (!later.resolved) advanceDay(ctx);
+  assert.match(later.outcome, /No answer|Nothing booked/);
+});
+
+test('you can ask for a raise in a band you joined; cooldown applies', async () => {
+  const { askForRaise } = await import('../src/engine/npc.js');
+  const { s, ctx, band } = joinABand('raise');
+  const p = s.people.player;
+  // Make the player clearly valuable and the band flush.
+  Object.assign(p.attrs, { skill: 10, experience: 9, charisma: 9, reliability: 9 });
+  p.missedRecent = 0;
+  band.cash = 5000;
+  const r = askForRaise(ctx, band.id, 40);
+  assert.ok(r.ok, r.msg);
+  const t = s.threads.find((x) => x.kind === 'raiseAsk');
+  if (!t.resolved) threadAction(ctx, t.id, 'accept');
+  assert.ok(band.playerPay >= 25, `got paid (${band.playerPay})`);
+  assert.ok(!askForRaise(ctx, band.id, 80).ok, 'cooldown blocks asking again right away');
+  for (let i = 0; i < 22; i++) advanceDay(ctx);
+  // A greedy ask from a weak player in a broke band gets turned down.
+  Object.assign(p.attrs, { skill: 1, experience: 1, charisma: 1, reliability: 1 });
+  p.missedRecent = 4;
+  band.cash = 0; band.standing = 0;
+  const before = band.playerPay;
+  askForRaise(ctx, band.id, before + 200);
+  const t2 = s.threads.filter((x) => x.kind === 'raiseAsk').at(0);
+  assert.ok(t2.resolved && /no/.test(t2.outcome), 'turned down');
+  assert.equal(band.playerPay, before);
+});
+
+test('pro studio sessions are not capped', async () => {
+  const { bookRecording } = await import('../src/engine/studio.js');
+  const { s, ctx, band } = await ledBandWithDrummer('sessions');
+  s.people.player.gear.push('guitar-1-dented-strat-alike', 'guitarAmp-1-15w-practice-amp', 'mic-1-mystery-dynamic-mic');
+  band.songs = 6; band.cash = 20000;
+  const r = bookRecording(ctx, band.id, { type: 'pro', sessions: 12, songs: 6 });
+  assert.ok(r.ok, r.msg);
+  assert.equal(band.events.filter((e) => e.type === 'recording').length, 12);
+});

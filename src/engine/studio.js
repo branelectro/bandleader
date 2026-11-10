@@ -1,10 +1,10 @@
 // Recording: basement demos, student class projects, paid studios. And releases.
-import { STUDIO_TYPES, SONG_WORDS } from './data.js?v=3';
-import { membersOf, performanceScore, lineupCheck, bandEffect } from './band.js?v=3';
-import { grantXp, shortName } from './people.js?v=3';
-import { createEvent, resolveAttendance, payWages } from './schedule.js?v=3';
-import { uid, weekday, dayLabel, news, createThread } from './state.js?v=3';
-import { clamp } from './rng.js?v=3';
+import { STUDIO_TYPES, SONG_WORDS } from './data.js?v=4';
+import { membersOf, performanceScore, lineupCheck, bandEffect } from './band.js?v=4';
+import { grantXp, shortName } from './people.js?v=4';
+import { createEvent, resolveAttendance, payWages } from './schedule.js?v=4';
+import { uid, weekday, dayLabel, news, createThread } from './state.js?v=4';
+import { clamp } from './rng.js?v=4';
 
 // How many sessions per song a studio needs before takes are "done right".
 const SESSIONS_PER_SONG = { basement: 1.5, student: 1.0, cheap: 1.0, pro: 0.7 };
@@ -27,7 +27,7 @@ export function bookRecording(ctx, bandId, { type, sessions, songs, startDay, ti
   if (!band || !s) return { ok: false, msg: 'Bad request.' };
   if (band.leaderId !== state.playerId && !band.npc) return { ok: false, msg: 'Only the band leader books studio time.' };
   if (songs < 1 || songs > band.songs) return { ok: false, msg: `You only have ${band.songs} songs.` };
-  if (sessions < s.minSessions || sessions > s.maxSessions) return { ok: false, msg: `${s.label} takes ${s.minSessions}-${s.maxSessions} sessions.` };
+  if (!Number.isInteger(sessions) || sessions < s.minSessions) return { ok: false, msg: `${s.label} needs at least ${s.minSessions} session${s.minSessions > 1 ? 's' : ''}.` };
   const lc = lineupCheck(band, membersOf(state, band));
   if (!lc.ok) return { ok: false, msg: `Lineup isn't ready: ${lc.problems[0]}` };
   if (band.recordings.some((r) => !r.done)) return { ok: false, msg: 'Finish the current recording first.' };
